@@ -1,0 +1,1 @@
+<a href="?{{ facet.get_string }}"{% if facet.selected %} class="selected"{% endif %}>{{ facet.label|safe }}&nbsp;{% if facet.label != "Reset this filter" %}<span class="count">({{ facet.count }})</span>{% endif %}</a>
