@@ -22,7 +22,7 @@ class FacetFactory(object):
     __metaclass__ = FacetFactoryBase
     
     FacetItemModel = FacetItem
-    all_label = unicode(_("Reset this filter"))
+    all_label = unicode(_("All"))
 
     @classmethod
     def is_selected(cls, query_value, selected_value):
@@ -84,7 +84,7 @@ class FacetFactory(object):
             yield {'value': f[cls.model_field], 'label': f[mffl]}
     
     @classmethod
-    def query_from_request(cls, request, test=False):
+    def query_from_request(cls, request):
         if request:
             GET_dict = dict(request.GET)
         
@@ -94,14 +94,12 @@ class FacetFactory(object):
                 if facetfactory is not None:
                     u = facetfactory.filter_param_from_GET_value(value[0])
                     query.update(u) #GET values are normally lists
-            if test:
-                import pdb; pdb.set_trace()
             return query
         return {}
 
     @classmethod
-    def apply_filter(cls, pool, request, test=False):
-        q = cls.query_from_request(request, test)
+    def apply_filter(cls, pool, request):
+        q = cls.query_from_request(request)
         
         # remove any trailing slashes
         for query in q:
@@ -111,7 +109,22 @@ class FacetFactory(object):
         return pool.filter(**q)
 
     @classmethod
-    def get_facets(cls, pool, request=None, query={}, include_empty = False, include_all=True, test=False, ):
+    def get_all_facets(cls, *args, **kwargs):
+        """
+        call FacetFactory.get_all_facets(pool, request, ...) to run all of the defined facets.
+        The result is a dictionary of each factory's facet generator.
+        """
+        results = {}
+        for name, factory in FacetFactory.GET_KEY_MAPPING.iteritems():
+            results[name] = factory.get_facets(*args, **kwargs)
+            
+        return results
+
+    @classmethod
+    def get_facets(cls, pool, request=None, query={}, include_empty = False, include_all=True):
+        """
+        Call this on implementing subclasses to 
+        """
         if request is not None:
             q = cls.query_from_request(request)
             q.update(query)
@@ -125,9 +138,6 @@ class FacetFactory(object):
                 
         fp = cls.filter_param()
         selected_value = cls._GET_value_from_db_value(q.get(fp, None))
-
-        if test:
-            import pdb; pdb.set_trace()
 
         if q.has_key(fp):
             del q[fp]
