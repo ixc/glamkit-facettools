@@ -101,12 +101,12 @@ class FacetFactory(object):
     def apply_filter(cls, pool, request):
         q = cls.query_from_request(request)
         
-        # remove any trailing slashes
-        for query in q:
-            if q[query][-1:] == "/":
-                q[query] = q[query][0:-1]
-                
-        return pool.filter(**q)
+        # # remove any trailing slashes
+        # for query in q: #not the right place for this - not all query params are strings
+        #     if q[query][-1:] == "/":
+        #         q[query] = q[query][0:-1]
+        #         
+        return pool.filter(**q), q
 
     @classmethod
     def get_all_facets(cls, *args, **kwargs):
@@ -114,6 +114,7 @@ class FacetFactory(object):
         call FacetFactory.get_all_facets(pool, request, ...) to run all of the defined facets.
         The result is a dictionary of each factory's facet generator.
         """
+        
         results = {}
         for name, factory in FacetFactory.GET_KEY_MAPPING.iteritems():
             results[name] = factory.get_facets(*args, **kwargs)
@@ -123,31 +124,24 @@ class FacetFactory(object):
     @classmethod
     def get_facets(cls, pool, request=None, query={}, include_empty = False, include_all=True):
         """
-        Call this on implementing subclasses to 
-        """
-        if request is not None:
-            q = cls.query_from_request(request)
-            q.update(query)
-        else:
-            q = query 
-        
-        # remove any trailing slashes
-        for query in q:
-            if q[query][-1:] == "/":
-                q[query] = q[query][0:-1]
-                
-        fp = cls.filter_param()
-        selected_value = cls._GET_value_from_db_value(q.get(fp, None))
+        Call this on implementing subclasses to yield each facet choice.
 
-        if q.has_key(fp):
-            del q[fp]
+        NB `pool` must be pre-faceted, if applicable, and the query used to do the pre-faceting should be passed in (sometimes you need to 'turn off' parts of the query to count alternatives.)
+        """
+        
+        fp = cls.filter_param()
+        selected_value = cls._GET_value_from_db_value(query.get(fp, None))
+
+        if query.has_key(fp): #if the pool is already filtered by this parameter, unfilter it.
+            query = query.copy()
+            del query[fp]
                 
         if include_all:
             yield cls.FacetItemModel(
                 factory = cls,
                 label = cls._facet_label_from_db_value(None),
                 value = cls._GET_value_from_db_value(None),
-                count = pool.filter(**q).count(),
+                count = pool.filter(**query).count(),
                 selected = cls.is_selected("", selected_value),
                 request = request,
                 all=True,
@@ -158,7 +152,7 @@ class FacetFactory(object):
                 
         for f in facet_query:
             if f['value'] is not None: #done that
-                r = q.copy()
+                r = query.copy()
                 r.update(cls.filter_param_from_db_value(f['value']))
                 count = pool.filter(**r).count()
                 value = cls._GET_value_from_db_value(f['value'])
@@ -265,6 +259,6 @@ class IndirectFacetFactory(FacetFactory):
         if not mffo:
             mffo = mffl
 
-        fl = cls.facet_pool.values(cls.model_field, mffl).order_by('slug').distinct()
+        fl = cls.facet_pool.values(cls.model_field, mffl).order_by(mffo).distinct()
         for f in fl:
             yield {'value': f[cls.model_field], 'label': f[mffl]}
