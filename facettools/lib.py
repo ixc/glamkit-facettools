@@ -32,6 +32,16 @@ class FacetValue(object):
         if not _from_facet:
             facet.add_value(self)
 
+    @property
+    def my_facet(self):
+        return self._facet
+
+    @property
+    def my_group(self):
+        if self.my_facet:
+            return self.my_facet.my_group
+        return None
+
     def add_items(self, items):
         if isinstance(items, (set, list, tuple)):
             self.items.update(items)
@@ -41,17 +51,45 @@ class FacetValue(object):
 
     @property
     def matching_items(self):
-        if not self._facet:
+        if not self.my_facet:
             raise InvalidObject(
                 "Cannot generate matching items from %s that is not "
                 "associated with a %s" % (self, Facet))
-        return self.items & self._facet.matching_items  # intersection
+        if not self.my_group:
+            return self.items
+        else:
+            if self.my_group.is_union_over_facets:
+                return self.items & self.my_facet.matching_items  # intersection
+            else:
+                return self.items & self.my_group.matching_items  # intersection
+
+    @property
+    def available_items(self):
+        if self.is_selected:
+            return self.matching_items
+        else:
+            if self.my_facet.is_union_within_facet:
+                if self.my_group.is_union_over_facets:
+                    return self.items
+                else:
+                    # Intersection of my items with matching items in
+                    # other facets I don't belong to.
+                    availables = set(self.items)  # Defensive copy
+                    for facet in self.my_group.facets:
+                        if facet != self.my_facet:
+                            availables &= facet.matching_items
+                    return availables
+            else:
+                if self.my_group.is_union_over_facets:
+                    return self.items & self.my_facet.matching_items
+                else:
+                    return self.items & self.my_group.matching_items
 
     def __eq__(self, other):
         if not isinstance(other, FacetValue):
             return False
         return (self.id == other.id
-            and self._facet == other._facet)
+            and self.my_facet == other.my_facet)
 
     def __unicode__(self):
         return u"%s %s - %s: %s (%s/%s)" % (
@@ -64,6 +102,7 @@ class Facet(object):
     def __init__(self, id, name=None, values=None,
             is_multi_select=False, is_union_within_facet=False):
         # Init internal variables
+        self._group = None
         self._values = {}
         self._value_ids_ordered = []
         self._selected_items = set()
@@ -77,6 +116,16 @@ class Facet(object):
         if values:
             for facet_value in values:
                 self.add_value(facet_value)
+
+    def set_group(self, group, _from_group=False):
+        self._group = group
+        # Avoid infinite regress when parent group is adding this object
+        if not _from_group:
+            group.add_facet(self)
+
+    @property
+    def my_group(self):
+        return self._group
 
     @property
     def values(self):
@@ -140,6 +189,13 @@ class Facet(object):
             items.update(facet_value.items)
         return items
 
+    @property
+    def available_items(self):
+        availables = set()
+        for facet_value in self.values:
+            availables |= facet_value.available_items
+        return availables
+
     # TODO Pre-calculate
     @property
     def matching_items(self):
@@ -195,6 +251,7 @@ class FacetGroup(object):
     def add_facet(self, facet):
         self._facets[facet.id] = facet
         self._facet_ids_ordered.append(facet.id)
+        facet.set_group(self, _from_group=True)
 
     @property
     def facets(self):
@@ -209,7 +266,11 @@ class FacetGroup(object):
     def facet_value_by_id(self, facet_id, value_id):
         return self.facet_by_id(facet_id).value_by_id(value_id)
 
-    def select_values(self, facet_id, value_ids):
+    def select_values(self, facet_and_value_ids_list):
+        for facet_id, value_id in facet_and_value_ids_list:
+            self.select_value(facet_id, value_id)
+
+    def select_value(self, facet_id, value_ids):
         facet = self.facet_by_id(facet_id)
         facet.select_values(value_ids)
 
@@ -253,3 +314,10 @@ class FacetGroup(object):
             return set()
         else:
             return matching_in_group
+
+    @property
+    def available_items(self):
+        availables = set()
+        for facet in self.facets:
+            availables |= facet.available_items
+        return availables
