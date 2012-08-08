@@ -314,12 +314,12 @@ class FacetGroupBase(type):
         new_class.add_to_class('app_label', app_label)
 
         # make the register of facets
-        facets = SortedDict()
+        facet_dict = SortedDict()
 
         # get facets from parents
         for base in parents:
-            if isinstance(getattr(base, 'facets', None), SortedDict):
-                facets.update(base.facets)
+            if isinstance(getattr(base, 'facet_dict', None), SortedDict):
+                facet_dict.update(base.facet_dict)
 
         # Add all attributes to the class.
         for obj_name, obj in attrs.items():
@@ -327,26 +327,26 @@ class FacetGroupBase(type):
             if isinstance(obj, Facet):
                 obj.name = obj_name
                 obj.group = new_class
-                facets[obj_name] = obj
+                facet_dict[obj_name] = obj
 
-        #sort facets according to field_order, if given.
-        if getattr(meta, 'field_order', None) is not None:
-            field_order = meta.field_order
-            if field_order:
-                new_class.add_to_class('field_order', field_order)
+        #sort facets according to facets_order, if given.
+        if getattr(meta, 'facets_order', None) is not None:
+            facets_order = meta.facets_order
+            if facets_order:
+                new_class.add_to_class('facets_order', facets_order)
                 try:
-                    assert set(field_order) == set(facets.keys())
+                    assert set(facets_order) == set(facet_dict.keys())
                 except AssertionError:
-                    raise ValueError("the field_order attribute of a FacetGroup "
-                                     "does not contain all fields: %s vs %s") % \
-                        (field_order, facets.keys())
+                    raise ValueError("the facets_order attribute of a FacetGroup "
+                                     "does not contain all the FacetGroup's "
+                                     "fields: %s vs %s") % (facets_order, facet_dict.keys())
 
                 sorted_tuples = sorted(
-                    facets.items(),
-                    key=lambda x: field_order.index(x[0])
+                    facet_dict.items(),
+                    key=lambda x: facets_order.index(x[0])
                 )
-                facets = SortedDict(sorted_tuples)
-        new_class.add_to_class('facets', facets)
+                facet_dict = SortedDict(sorted_tuples)
+        new_class.add_to_class('facet_dict', facet_dict)
 
         return new_class
 
@@ -363,8 +363,13 @@ class FacetGroup(object):
     __metaclass__ = FacetGroupBase
     _matching_items = None
 
-    # a `facets` SortedDict is injected by the metaclass,
+    # a `facet_dict` SortedDict is injected by the metaclass,
     # which contains all of the facets defined in the subclass
+    # sorted by the order defined in Meta.facets_order
+
+    @classmethod
+    def facets(cls):
+        return cls.facet_dict.values()
 
     def __init__(self):
         raise TypeError("FacetGroup subclasses shouldn't be instantiated "
@@ -389,7 +394,7 @@ class FacetGroup(object):
         cls.clear_items()
         for item in cls.unfiltered_collection():
             cls.index_item(item, inhibit_save=True)
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.save()
         cls.update()
 
@@ -399,17 +404,17 @@ class FacetGroup(object):
         Subclasses that implement storage may wish to purge the storage to
         avoid orphans.
         """
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.clear_items()
 
     @classmethod
     def index_item(cls, item, inhibit_save=False):
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.index_item(item, inhibit_save)
 
     @classmethod
     def unindex_item(cls, item, inhibit_save=False):
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.unindex_item(item, inhibit_save)
 
     @classmethod
@@ -422,7 +427,7 @@ class FacetGroup(object):
                 return cls._matching_items
 
         mi = None
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             if facet not in ignore:
                 if mi is None:
                     mi = facet.matching_items().copy()
@@ -437,7 +442,7 @@ class FacetGroup(object):
     @classmethod
     def invalidate(cls):
         cls._matching_items = None
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.invalidate()
 
     @classmethod
@@ -447,7 +452,7 @@ class FacetGroup(object):
         Update the sort of facet labels to reflect the current selection.
         """
         cls.invalidate()
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.sort()
 
     @classmethod
@@ -455,6 +460,6 @@ class FacetGroup(object):
         """
         Unselect all facets
         """
-        for facet in cls.facets.values():
+        for facet in cls.facets():
             facet.clear_selection()
 

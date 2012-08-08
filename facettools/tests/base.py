@@ -50,12 +50,14 @@ class TestSimpleFacets(TestCase):
 
     def test_facetgroup_metaclass(self):
         self.assertEqual(ShopItemFacetGroup.app_label, "facettools")
-        self.assertIsInstance(ShopItemFacetGroup.facets, SortedDict)
-        self.assertEqual(tuple(ShopItemFacetGroup.facets.keys()),
-                         tuple(ShopItemFacetGroup.field_order))
+        self.assertIsInstance(ShopItemFacetGroup._facets, SortedDict)
+        # did the sort work
+        self.assertEqual(tuple(ShopItemFacetGroup._facets.keys()),
+                         tuple(ShopItemFacetGroup.facets_order))
 
         # facets can be accessed by name too
-        self.assertEqual(ShopItemFacetGroup.facets['colours'], ShopItemFacetGroup.colours)
+        self.assertEqual(ShopItemFacetGroup.facet_dict['colours'],
+                         ShopItemFacetGroup.colours)
 
     def test_facet_display(self):
         f = ShopItemFacetGroup

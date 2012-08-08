@@ -54,7 +54,7 @@ class ShopItemFacetGroup(ModelFacetGroup):
 
     class Meta:
         app_label="facettools"
-        field_order = ('price', 'tags', 'colours') #specify a field ordering
+        facets_order = ('price', 'tags', 'colours') #specify a field ordering
 
     @classmethod
     def get_colours_facet(cls, obj):
