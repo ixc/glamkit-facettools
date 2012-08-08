@@ -1,90 +1,6 @@
 from django.test import TestCase
-from django.db import models
 from django.utils.datastructures import SortedDict
-from facettools.base import ModelFacetGroup, FacetGroup, Facet
-from facettools.utils import sort_by_count
-
-class Colour(models.Model):
-    name = models.CharField(max_length=255)
-
-    def __unicode__(self):
-        return self.name
-
-
-class ShopItem(models.Model):
-    name = models.CharField(max_length=255)
-    dollars = models.IntegerField(null=True)
-    colours = models.ManyToManyField(Colour, null=True)
-
-    def __unicode__(self):
-        return "%s ($%s)" % (self.name, self.dollars)
-
-
-class ShopItemFacetGroup(ModelFacetGroup):
-
-    def _sort_price(a, b):
-        d = {
-            'free': 0,
-            '$0-$50': 1,
-            '$50-$100': 2,
-            '$100 or more': 3
-        }
-        return cmp(d[a.name], d[b.name])
-
-    price = Facet(
-        verbose_name="the price",
-        all_value="any price",
-        cmp_func=_sort_price
-    )
-    colours = Facet(
-        verbose_name="the colours",
-        select_multiple=True,
-    )
-    #selecting multiple colours  has an OR effect.
-    tags = Facet(
-        verbose_name="the tags",
-        select_multiple=True,
-        intersect_if_multiple=True,
-        cmp_func=sort_by_count
-    ) #selecting multiple tags has an AND effect
-
-    field_order = ('price', 'tags', 'colours') #specify a field ordering
-
-    @classmethod
-    def get_colours_facet(cls, obj):
-        return [x.name for x in obj.colours.all()]
-
-    @classmethod
-    def get_price_facet(cls, obj):
-        if obj.dollars is None:
-            return None
-        result = []
-        if obj.dollars == 0:
-            result.append('free')
-        if obj.dollars <=50:
-            result.append('$0-$50')
-        if obj.dollars >=50 and obj.dollars <=100:
-            result.append('$50-$100')
-        if obj.dollars >=100:
-            result.append('$100 or more')
-
-        return result
-
-    @classmethod
-    def get_tags_facet(cls, obj):
-         result = cls.get_colours_facet(obj)
-         if len(result) > 1:
-             result.append("multicoloured")
-         if obj.dollars == 0:
-             result.append("free")
-         if "shirt" in obj.name:
-             result.append("shirt")
-         return result
-
-    @classmethod
-    def unfiltered_collection(cls):
-        return ShopItem.objects.all()
-
+from .models import *
 
 class TestSimpleFacets(TestCase):
 
@@ -447,8 +363,7 @@ class TestSimpleFacets(TestCase):
         # tags are AND-conjoined (ie intersection)
         f.update()
         self.assertEqual(set(f.matching_items()),
-            set(ShopItem.objects.filter(colours=self.blue).filter(colours=self
-            .red))
+            set(ShopItem.objects.filter(colours=self.blue).filter(colours=self.red))
         )
 
         # unselect all facets
@@ -459,23 +374,3 @@ class TestSimpleFacets(TestCase):
         # you can pass a value that doesn't exist, but it will empty the
         # queryset (no result will show as selected, including 'all').
         self.assertRaises(KeyError, f.colours.select, 'maroon')
-
-
-    def test_facet_GET_strings(self):
-        #TODO: generate GET strings from a request
-        pass
-
-    def test_reindex(self):
-        """
-        Save a new ShopItem
-        Update an existing ShopItem
-        Delete a ShopItem
-
-        after each, test that the facets are updated
-        """
-        pass
-
-
-    def test_facetvaluestore(self):
-        #TODO: test api of persistent store
-        pass

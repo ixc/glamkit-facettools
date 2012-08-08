@@ -290,8 +290,17 @@ class FacetGroupBase(type):
         # For 'shop.models', this would be 'shop'.
         module = attrs.pop('__module__')
         new_class = super_new(cls, name, bases, {'__module__': module})
-        model_module = sys.modules[new_class.__module__]
-        app_label = model_module.__name__.split('.')[-2]
+        attr_meta = attrs.pop('Meta', None)
+        if not attr_meta:
+            meta = getattr(new_class, 'Meta', None)
+        else:
+            meta = attr_meta
+
+        if getattr(meta, 'app_label', None) is None:
+            model_module = sys.modules[new_class.__module__]
+            app_label = model_module.__name__.split('.')[-2]
+        else:
+            app_label = meta.app_label
         new_class.add_to_class('app_label', app_label)
 
         # make the register of facets
@@ -311,20 +320,22 @@ class FacetGroupBase(type):
                 facets[obj_name] = obj
 
         #sort facets according to field_order, if given.
-        field_order = attrs.pop('field_order', None)
-        if field_order:
-            try:
-                assert set(field_order) == set(facets.keys())
-            except AssertionError:
-                raise ValueError("the field_order attribute of a FacetGroup "
-                                 "does not contain all fields: %s vs %s") % \
-                    (field_order, facets.keys())
+        if getattr(meta, 'field_order', None) is not None:
+            field_order = meta.field_order
+            if field_order:
+                new_class.add_to_class('field_order', field_order)
+                try:
+                    assert set(field_order) == set(facets.keys())
+                except AssertionError:
+                    raise ValueError("the field_order attribute of a FacetGroup "
+                                     "does not contain all fields: %s vs %s") % \
+                        (field_order, facets.keys())
 
-            sorted_tuples = sorted(
-                facets.items(),
-                key=lambda x: field_order.index(x[0])
-            )
-            facets = SortedDict(sorted_tuples)
+                sorted_tuples = sorted(
+                    facets.items(),
+                    key=lambda x: field_order.index(x[0])
+                )
+                facets = SortedDict(sorted_tuples)
         new_class.add_to_class('facets', facets)
 
         return new_class

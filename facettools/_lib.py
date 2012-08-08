@@ -13,7 +13,7 @@ class FacetValue(object):
     def __init__(self, id, items=None, name=None, facet=None):
         self.is_selected = False
         self.items = set()
-        self._facet = None
+        self._facet = facet
 
         self.id = id
         if isinstance(items, set):
@@ -22,24 +22,16 @@ class FacetValue(object):
             self.items = set(items)
         if name is None:
             name = id
-        if facet:
-            self.set_facet(facet)
         self.name = name
 
-    def set_facet(self, facet, _from_facet=False):
-        self._facet = facet
-        # Avoid infinite regress when parent facet is adding this object
-        if not _from_facet:
-            facet.add_value(self)
-
     @property
-    def my_facet(self):
+    def facet(self):
         return self._facet
 
     @property
-    def my_group(self):
-        if self.my_facet:
-            return self.my_facet.my_group
+    def group(self):
+        if self.facet:
+            return self.facet.group
         return None
 
     def add_items(self, items):
@@ -51,50 +43,54 @@ class FacetValue(object):
 
     @property
     def matching_items(self):
-        if not self.my_facet:
+        if not self.facet:
             raise InvalidObject(
                 "Cannot generate matching items from %s that is not "
                 "associated with a %s" % (self, Facet))
-        if not self.my_group:
+        if not self.group:
             return self.items
         else:
-            if self.my_group.is_union_over_facets:
-                return self.items & self.my_facet.matching_items  # intersection
+            if self.group.is_union_over_facets:
+                return self.items & self.facet.matching_items  # intersection
             else:
-                return self.items & self.my_group.matching_items  # intersection
+                return self.items & self.group.matching_items  # intersection
 
     @property
     def available_items(self):
         if self.is_selected:
             return self.matching_items
         else:
-            if self.my_facet.is_union_within_facet:
-                if self.my_group.is_union_over_facets:
+            if self.facet.is_union_within_facet:
+                if self.group.is_union_over_facets:
                     return self.items
                 else:
                     # Intersection of my items with matching items in
                     # other facets I don't belong to.
                     availables = set(self.items)  # Defensive copy
-                    for facet in self.my_group.facets:
-                        if facet != self.my_facet:
+                    for facet in self.group.facets:
+                        if facet != self.facet:
                             availables &= facet.matching_items
                     return availables
             else:
-                if self.my_group.is_union_over_facets:
-                    return self.items & self.my_facet.matching_items
+                if self.group.is_union_over_facets:
+                    return self.items & self.facet.matching_items
                 else:
-                    return self.items & self.my_group.matching_items
+                    return self.items & self.group.matching_items
+
+    @property
+    def count(self):
+        return len(self.matching_items)
 
     def __eq__(self, other):
         if not isinstance(other, FacetValue):
             return False
         return (self.id == other.id
-            and self.my_facet == other.my_facet)
+            and self.facet == other.facet)
 
     def __unicode__(self):
         return u"%s %s - %s: %s (%s/%s)" % (
             self.__class__.__name__, repr(self.id), self.name, self.items,
-            len(self.count_matching_items), len(self.items))
+            len(self.count), len(self.items))
 
 
 class Facet(object):
@@ -124,7 +120,7 @@ class Facet(object):
             group.add_facet(self)
 
     @property
-    def my_group(self):
+    def group(self):
         return self._group
 
     @property
