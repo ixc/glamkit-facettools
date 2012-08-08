@@ -47,17 +47,15 @@ class FacetValue(object):
         """
 
         if self._matching_items is None:
-
-            if self.is_selected: #if we're selected, there are no hypotheticals
-                result = self.facet.group.matching_items()
-
-            elif self.facet.select_multiple:
-                if self.facet.intersect_if_multiple:
-                    result = self.facet.group.matching_items() & self.items
-                else: #union of facets
-                    result = self.facet.group.matching_items(ignore=[self.facet]) & \
-                        (self.facet.matching_items() | self.items)
+            if self.is_all:
+                # then ignore whatever is selected
+                result = self.facet.group.matching_items(ignore=[self.facet])
+            elif self.facet.select_multiple and self.facet.intersect_if_multiple:
+                # then simulate further intersection
+                result = self.facet.group.matching_items() & self.items
             else:
+                # then simulate intersection as though no other values were
+                # selected
                 result = self.facet.group.matching_items(ignore=[self.facet]) & \
                        self.items
 
@@ -96,33 +94,6 @@ class FacetValue(object):
         # a no-op, but used in subclasses that provide storage
         pass
 
-class StoredFacetValue(FacetValue):
-    """
-    A facetvalue that persists items in the FacetValueStore model.
-    """
-
-    # TODO: specify storage as a Meta parameter of FacetGroup
-    # rather than stitching subclasses together.
-
-    def __init__(self, *args, **kwargs):
-        self._store = None
-        super(FacetValueWithStore, self).__init__(*args, **kwargs)
-
-    @property
-    def store(self):
-        if self._store is None:
-            self._shore = FacetValueStore.objects.get_or_create(
-                facet_key=self.facet.key, name=self.name)
-        return self._store
-
-    def initialise_items(self):
-        self._store = None #invalidate the store
-        return self.store.items
-
-    def save(self):
-        self.store.items = self.get_items()
-        self.store.save()
-
 
 class Facet(object):
     """
@@ -133,7 +104,7 @@ class Facet(object):
     def __init__(self,
                  verbose_name=None,
                  all_value="all",
-                 order_by=None,
+                 cmp_func=None,
                  select_multiple=False,
                  intersect_if_multiple=False,
     ):
@@ -142,10 +113,10 @@ class Facet(object):
         self.name = None # this will be populated by the metaclass
         self._verbose_name = verbose_name # access with `verbose_name`
         self.all_value = all_value
-        if order_by:
-            self.order_by = order_by
+        if cmp_func:
+            self.cmp_func = cmp_func
         else:
-            self.order_by = lambda f: f.name
+            self.cmp_func = lambda a, b: cmp(a.name, b.name)
         self.select_multiple = select_multiple
         self.intersect_if_multiple = intersect_if_multiple
         # the collection of FacetValueClass instances
@@ -218,8 +189,6 @@ class Facet(object):
                         # take union of selected values
                         self._matching_items |= value.items
 
-        if self._matching_items is None:
-            import pdb; pdb.set_trace()
         return self._matching_items
 
     def invalidate(self):
@@ -233,16 +202,19 @@ class Facet(object):
     def __repr__(self):
         return "<%s: %s>" % (self.__class__.__name__, self.name)
 
-    def sort(self, key=None):
-        if key is None:
-            key = self.order_by
+    def sort(self, cmp_func=None):
+        if cmp_func is None:
+            cmp_func = self.cmp_func
 
-        def _keyfunc(v):
-            if v.is_all:
+        def _sort_func(a, b):
+            if a.is_all:
                 return -1
-            return key(v)
+            if b.is_all:
+                return 1
 
-        self.values = sorted(self._values.values(), key=_keyfunc)
+            return cmp_func(a, b)
+
+        self.values = sorted(self._values.values(), cmp=_sort_func)
 
     def select(self, *values):
         """
@@ -275,6 +247,10 @@ class Facet(object):
         """
         Mark value(s) of this facet as not being selected.
         """
+
+        if values == [self.all_value]:
+            raise ValueError("You cannot unselect 'all'. Select another facet"
+                             " instead.")
 
          # make the unselection
         for v in values:
@@ -413,23 +389,22 @@ class FacetGroup(object):
         """
         Take the intersection of the items that match each facet.
         """
-        if cls._matching_items is None:
-            mi = None
-            for facet in cls.facets.values():
-                if facet not in ignore:
-                    if mi is None:
-                        mi = facet.matching_items().copy()
-                    else:
-                        mi &= facet.matching_items()
+        if ignore == []:
+            if cls._matching_items is not None:
+                return cls._matching_items
 
-            if not ignore: #this is the 'global' matching items; cache it.
-                cls._matching_items = mi
-            else: # this is a special-case 'ignore' run. Don't cache.
-                return mi
-#        if cls._matching_items is None:
-#            import pdb; pdb.set_trace()
+        mi = None
+        for facet in cls.facets.values():
+            if facet not in ignore:
+                if mi is None:
+                    mi = facet.matching_items().copy()
+                else:
+                    mi &= facet.matching_items()
 
-        return cls._matching_items
+        if ignore == []:
+            cls._matching_items = mi
+
+        return mi
 
     @classmethod
     def invalidate(cls):
