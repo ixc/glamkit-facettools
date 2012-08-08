@@ -1,0 +1,462 @@
+import sys
+from django.utils.datastructures import SortedDict
+from facettools.utils import get_verbose_name
+
+
+class FacetValue(object):
+    def __init__(self, facet, name, is_all=False, is_selected=False):
+        # the facet that I am a value of
+        self.facet = facet
+        # the string that is displayed
+        self.name = name
+        # the set of matching items (when no other facets are selected)
+        # use `get_/set_items` to get and set.
+        self._items = self.initialise_items()
+        self.is_all = is_all
+        self._matching_items = None
+        self.is_selected = is_selected
+
+    @property
+    def items(self):
+        return self._items
+
+    def set_items(self, val, inhibit_save=False):
+        self._items = val
+        if not inhibit_save:
+            self.save()
+
+    def add_item(self, item, inhibit_save=False):
+        # Assume we have a single item
+        self._items.add(item)
+        if not inhibit_save:
+            self.save()
+
+    def clear_items(self, inhibit_save=False):
+        self.set_items(set(), inhibit_save)
+
+    def matching_items(self):
+        """
+        The heart of the matter:
+
+        Returns the items that are (or would be) matched if the item is
+        selected, in combination with any other facet selections.
+
+        This is tricky because if a sibling value is selected and will
+        become unselected, or if there is a union relation between siblings,
+        we need to take that effect into account.
+        """
+
+        if self._matching_items is None:
+
+            if self.is_selected: #if we're selected, there are no hypotheticals
+                result = self.facet.group.matching_items()
+
+            elif self.facet.select_multiple:
+                if self.facet.intersect_if_multiple:
+                    result = self.facet.group.matching_items() & self.items
+                else: #union of facets
+                    result = self.facet.group.matching_items(ignore=[self.facet]) & \
+                        (self.facet.matching_items() | self.items)
+            else:
+                result = self.facet.group.matching_items(ignore=[self.facet]) & \
+                       self.items
+
+            self._matching_items = result
+        return self._matching_items
+
+    def invalidate(self):
+        self._matching_items = None
+
+    @property
+    def count(self):
+        return len(self.matching_items())
+
+    @property
+    def key(self):
+        return "%s__%s" % (self.facet.key, self.name)
+
+    def __eq__(self, other):
+        if not isinstance(other, FacetValue):
+            return False
+        return (self.key == other.key
+            and self.facet == other.facet)
+
+    def __unicode__(self):
+        return self.name
+
+    def __repr__(self):
+        return "<%s: %s (%s)>" % (self.__class__.__name__, self.name,
+                                  self.count)
+
+    def initialise_items(self):
+        # subclasses may retrieve a stored set for this value
+        return set()
+
+    def save(self):
+        # a no-op, but used in subclasses that provide storage
+        pass
+
+class StoredFacetValue(FacetValue):
+    """
+    A facetvalue that persists items in the FacetValueStore model.
+    """
+
+    # TODO: specify storage as a Meta parameter of FacetGroup
+    # rather than stitching subclasses together.
+
+    def __init__(self, *args, **kwargs):
+        self._store = None
+        super(FacetValueWithStore, self).__init__(*args, **kwargs)
+
+    @property
+    def store(self):
+        if self._store is None:
+            self._shore = FacetValueStore.objects.get_or_create(
+                facet_key=self.facet.key, name=self.name)
+        return self._store
+
+    def initialise_items(self):
+        self._store = None #invalidate the store
+        return self.store.items
+
+    def save(self):
+        self.store.items = self.get_items()
+        self.store.save()
+
+
+class Facet(object):
+    """
+    A collection of FacetValues, that is in turn grouped in a FacetGroup
+    """
+    _FacetValueClass = FacetValue
+
+    def __init__(self,
+                 verbose_name=None,
+                 all_value="all",
+                 order_by=None,
+                 select_multiple=False,
+                 intersect_if_multiple=False,
+    ):
+        self.group = None # a FacetGroup subclass. It will be populated by the
+                            # metaclass
+        self.name = None # this will be populated by the metaclass
+        self._verbose_name = verbose_name # access with `verbose_name`
+        self.all_value = all_value
+        if order_by:
+            self.order_by = order_by
+        else:
+            self.order_by = lambda f: f.name
+        self.select_multiple = select_multiple
+        self.intersect_if_multiple = intersect_if_multiple
+        # the collection of FacetValueClass instances
+        self._values = {} # dict of FacetValue objects, for bookkeeping
+        self.values = None # a sorted list of FacetValues objects,
+        # generated by calling update()
+        self._matching_items = None
+
+    @property
+    def key(self):
+        return "%s__%s" % (self.group.key(), self.name)
+
+    @property
+    def verbose_name(self):
+        return self._verbose_name or self.name.replace("_", " ")
+
+    def clear_items(self):
+        """
+        Clearing items on a facet means resetting values.
+        Subclasses that implement storage may want to purge the cache.
+        """
+        self._values = {}
+
+    def index_item(self, item, inhibit_save=False):
+        # call get_FOO_facet on the item
+        attr_name = "get_%s_facet" % self.name
+        attr = getattr(self.group, attr_name, None)
+
+        if attr:
+            values = attr(item)
+        else:
+            values = None
+
+        if values is not None:
+            self.index_values(values, item, inhibit_save)
+
+        # add every item to the 'all' facet
+        if not self.all_value in self._values:
+            self._values[self.all_value] = self._FacetValueClass(facet=self,
+                                            name=self.all_value, is_all=True,
+                                            is_selected=True)
+        self._values[self.all_value].add_item(item)
+
+    def index_values(self, values, item, inhibit_save=False):
+        for value in values:
+            # initialise a FacetValue if we have to
+            if value not in self._values:
+                self._values[value] = self._FacetValueClass(facet=self,
+                                                            name=value)
+
+            self._values[value].add_item(item)
+        if not inhibit_save:
+            self.save()
+
+    def save(self):
+        # save all my values (it's a no-op, but subclasses may save to storage)
+        for value in self._values.values():
+            value.save()
+
+    def matching_items(self):
+        if self._matching_items is None:
+            for value in self.selected():
+                if self._matching_items is None:
+                    self._matching_items = value.items.copy()
+                else:
+                    if self.select_multiple and self.intersect_if_multiple:
+                        # take intersection of selected values
+                        self._matching_items &= value.items
+                    else:
+                        # take union of selected values
+                        self._matching_items |= value.items
+
+        if self._matching_items is None:
+            import pdb; pdb.set_trace()
+        return self._matching_items
+
+    def invalidate(self):
+        self._matching_items = None
+        for value in self._values.values():
+            value.invalidate()
+
+    def __unicode__(self):
+        return self.name
+
+    def __repr__(self):
+        return "<%s: %s>" % (self.__class__.__name__, self.name)
+
+    def sort(self, key=None):
+        if key is None:
+            key = self.order_by
+
+        def _keyfunc(v):
+            if v.is_all:
+                return -1
+            return key(v)
+
+        self.values = sorted(self._values.values(), key=_keyfunc)
+
+    def select(self, *values):
+        """
+        Mark value(s) of this facet as being selected.
+        """
+
+        # Can't select more than one value, unless select_multilple is true
+        if len(values) > 1:
+            if not self.select_multiple:
+                raise ValueError("%s does not allow more than one value to be"
+                                 " selected" % self)
+            if self.all_value in values:
+                raise ValueError("You cannot select 'all' at the same time as"
+                                 " another facet")
+
+
+        if not values == [self.all_value]:
+            self._values[self.all_value].is_selected = False
+
+        if not self.select_multiple or values == [self.all_value]:
+            # clear other selections
+            for v in self._values:
+                self._values[v].is_selected = False
+
+        # make the selection
+        for v in values:
+            self._values[v].is_selected = True
+
+    def unselect(self, *values):
+        """
+        Mark value(s) of this facet as not being selected.
+        """
+
+         # make the unselection
+        for v in values:
+            self._values[v].is_selected = False
+
+        # if nothing is selected, select 'all'
+        if len(self.selected()) == 0:
+            self._values[self.all_value].is_selected = True
+
+    def clear_selection(self):
+        for v in self._values:
+            self._values[v].is_selected = False
+        self._values[self.all_value].is_selected = True
+
+
+    def selected(self):
+        return filter(lambda x: x.is_selected, self._values.values())
+
+
+
+class FacetGroupBase(type):
+    """
+    Metaclass for all FacetGroups
+    """
+    # FIXME: TODO:
+    # We should deepcopy parent facets, because they'll be tied up in
+    # different implementations and hence will have different metadata.
+    def __new__(cls, name, bases, attrs):
+        super_new = super(FacetGroupBase, cls).__new__
+        parents = [b for b in bases if isinstance(b, FacetGroupBase)]
+        if not parents:
+            # If this isn't a subclass of FacetGroup,
+            # don't do anything special.
+            return super_new(cls, name, bases, attrs)
+
+        # Figure out the app_label by looking one level up.
+        # For 'shop.models', this would be 'shop'.
+        module = attrs.pop('__module__')
+        new_class = super_new(cls, name, bases, {'__module__': module})
+        model_module = sys.modules[new_class.__module__]
+        app_label = model_module.__name__.split('.')[-2]
+        new_class.add_to_class('app_label', app_label)
+
+        # make the register of facets
+        facets = SortedDict()
+
+        # get facets from parents
+        for base in parents:
+            if isinstance(getattr(base, 'facets', None), SortedDict):
+                facets.update(base.facets)
+
+        # Add all attributes to the class.
+        for obj_name, obj in attrs.items():
+            new_class.add_to_class(obj_name, obj)
+            if isinstance(obj, Facet):
+                obj.name = obj_name
+                obj.group = new_class
+                facets[obj_name] = obj
+
+        #sort facets according to field_order, if given.
+        field_order = attrs.pop('field_order', None)
+        if field_order:
+            try:
+                assert set(field_order) == set(facets.keys())
+            except AssertionError:
+                raise ValueError("the field_order attribute of a FacetGroup "
+                                 "does not contain all fields: %s vs %s") % \
+                    (field_order, facets.keys())
+
+            sorted_tuples = sorted(
+                facets.items(),
+                key=lambda x: field_order.index(x[0])
+            )
+            facets = SortedDict(sorted_tuples)
+        new_class.add_to_class('facets', facets)
+
+        return new_class
+
+    def add_to_class(cls, name, value):
+        if hasattr(value, 'contribute_to_class'):
+            value.contribute_to_class(cls, name)
+        else:
+            setattr(cls, name, value)
+
+class FacetGroup(object):
+    """
+    A Facetgroup is the whole set of facets on a collection that interact.
+    """
+    __metaclass__ = FacetGroupBase
+    _matching_items = None
+
+    # a `facets` SortedDict is injected by the metaclass,
+    # which contains all of the facets defined in the subclass
+
+    def __init__(self):
+        raise TypeError("FacetGroup subclasses shouldn't be instantiated "
+                        "(they are singleton-like).")
+
+    @classmethod #shame it can't be a property
+    def key(cls):
+        return "%s__%s" % (cls.app_label, get_verbose_name(cls.__name__))
+
+    @classmethod
+    def rebuild_index(cls):
+        """
+        Bulk update to rebuild index
+        1. erase old index
+        2. iterate through unfiltered_collection
+            add it to 'all' for each defined facet
+            call get_FOO_facet for each defined facet
+            update facet values with the result
+        3. save facet values to the index
+        """
+        cls.clear_items()
+        for item in cls.unfiltered_collection():
+            cls.index_item(item, inhibit_save=True)
+        for facet in cls.facets.values():
+            facet.save()
+
+    @classmethod
+    def clear_items(cls):
+        """
+        Subclasses that implement storage may wish to purge the storage to
+        avoid orphans.
+        """
+        for facet in cls.facets.values():
+            facet.clear_items()
+
+    @classmethod
+    def index_item(cls, item, inhibit_save=False):
+        for facet in cls.facets.values():
+            facet.index_item(item, inhibit_save)
+
+    @classmethod
+    def matching_items(cls, ignore=[]):
+        """
+        Take the intersection of the items that match each facet.
+        """
+        if cls._matching_items is None:
+            mi = None
+            for facet in cls.facets.values():
+                if facet not in ignore:
+                    if mi is None:
+                        mi = facet.matching_items().copy()
+                    else:
+                        mi &= facet.matching_items()
+
+            if not ignore: #this is the 'global' matching items; cache it.
+                cls._matching_items = mi
+            else: # this is a special-case 'ignore' run. Don't cache.
+                return mi
+#        if cls._matching_items is None:
+#            import pdb; pdb.set_trace()
+
+        return cls._matching_items
+
+    @classmethod
+    def invalidate(cls):
+        cls._matching_items = None
+        for facet in cls.facets.values():
+            facet.invalidate()
+
+    @classmethod
+    def update(cls):
+        """
+        Invalidate the _matching_items cache
+        Update the sort of facet values to reflect the current selection.
+        """
+        cls.invalidate()
+        for facet in cls.facets.values():
+            facet.sort()
+
+    @classmethod
+    def clear_all(cls):
+        """
+        Unselect all facets
+        """
+        for facet in cls.facets.values():
+            facet.clear_selection()
+
+class ModelFacetGroup(FacetGroup):
+    """
+    A Facetgroup that knows about querysets
+    """
+    pass

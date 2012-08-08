@@ -1,0 +1,2 @@
+Generate a sentence based on selected facets
+Allow class hierarchies of FacetGroup, to inherit facets that behave similarly.

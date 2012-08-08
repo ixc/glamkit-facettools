@@ -1,0 +1,19 @@
+{% block facets %}
+	<h2>Narrow your search</h2>
+	{% for facet in facets %}
+		<h3>{{ facet }}</h3>
+		<ul>
+			{% for value in facet.values %}
+				<li>{% include "facettools/facet_value.html %}</li>
+			{% endfor %}
+		</ul>
+
+	{% endfor %}
+{% endblock %}
+
+{% block items %}
+	<h2>Results</h2>
+	{% for item in items %}
+		{{ item }}
+	{% endfor %}
+{% endblock %}
