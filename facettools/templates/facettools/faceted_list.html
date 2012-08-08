@@ -3,8 +3,8 @@
 	{% for facet in facets %}
 		<h3>{{ facet }}</h3>
 		<ul>
-			{% for value in facet.values %}
-				<li>{% include "facettools/facet_value.html %}</li>
+			{% for label in facet.labels %}
+				<li>{% include "facettools/facet_label.html %}</li>
 			{% endfor %}
 		</ul>
 

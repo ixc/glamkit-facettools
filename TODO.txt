@@ -1,2 +1,4 @@
 Generate a sentence based on selected facets
 Allow class hierarchies of FacetGroup, to inherit facets that behave similarly.
+
+cls.facets.values() is used a lot. Should just be a get/set property.

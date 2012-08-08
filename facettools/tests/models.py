@@ -1,5 +1,6 @@
 from django.db import models
-from facettools.base import ModelFacetGroup, FacetGroup, Facet
+from facettools.base import Facet
+from facettools.model_base import ModelFacetGroup
 from facettools.utils import sort_by_count
 
 class Colour(models.Model):
@@ -23,7 +24,6 @@ class ShopItem(models.Model):
     class Meta:
         app_label="facettools"
 
-
 class ShopItemFacetGroup(ModelFacetGroup):
 
     def _sort_price(a, b):
@@ -37,7 +37,7 @@ class ShopItemFacetGroup(ModelFacetGroup):
 
     price = Facet(
         verbose_name="the price",
-        all_value="any price",
+        all_label="any price",
         cmp_func=_sort_price
     )
     colours = Facet(
@@ -90,4 +90,3 @@ class ShopItemFacetGroup(ModelFacetGroup):
     @classmethod
     def unfiltered_collection(cls):
         return ShopItem.objects.all()
-
