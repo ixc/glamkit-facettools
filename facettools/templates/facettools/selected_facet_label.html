@@ -1,6 +1,6 @@
 {% load generic_tags %}
 {% if not label.is_all %}{# can't unselect 'all' #}
-	<a href="?{% update_GET label.facet.name -= label %}"
+	<a href="?{% update_GET label.facet.name -= label 'page' = None %}"
 		 class="selected"
 	>
 {% endif %}
