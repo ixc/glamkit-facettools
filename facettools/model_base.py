@@ -10,6 +10,10 @@ class ModelFacetGroup(FacetGroup):
     A Facetgroup that knows about model CRUD operations
     """
 
+    @property
+    def model(self):
+        return self.unfiltered_collection().model
+
     def watch_model(self, model):
         pre_save.connect(self.pre_save, sender=model)
         post_save.connect(self.post_save, sender=model)
@@ -45,3 +49,7 @@ class ModelFacetGroup(FacetGroup):
             self.unindex_item(instance)
             self.index_item(instance)
 
+    def queryset(self):
+        matches = self.matching_items()
+        ids = [m.id for m in matches]
+        return self.model.objects.filter(id__in=ids)

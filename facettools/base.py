@@ -154,6 +154,8 @@ class Facet(object):
             facet_labels = None
 
         if facet_labels is not None:
+            if not isinstance(facet_labels, (list, tuple, set)):
+                facet_labels = [facet_labels]
             self.index_labels(facet_labels, item, inhibit_save)
 
         # add every item to the 'all' facet
@@ -312,7 +314,6 @@ class FacetGroup(object):
         try:
             return self.facets[item]
         except KeyError:
-            import pdb; pdb.set_trace()
             raise AttributeError(
                 "%s object has no attribute '%s' - it is not the name of a facet either." \
                     % (self.__class__.__name__, item))
@@ -393,3 +394,10 @@ class FacetGroup(object):
         for facet in self.facet_list:
             facet.clear_selection()
 
+    def apply_request(self, request):
+        # Parse a request to select the facets within it.
+        get = request.GET
+        for facet in self.facet_list:
+            vals = get.getlist(facet.name)
+            if vals:
+                facet.select(*vals)

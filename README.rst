@@ -26,3 +26,7 @@ A `FacetField` is an ordered set of `FacetLabel`s, plus a heading.
 
 A `FacetLabel` contains the information necessary to render a single facet
 option, as part of a list or drop-down.
+
+Requirements
+------------
+django-generic from https://bitbucket.org/cogat/django-generic

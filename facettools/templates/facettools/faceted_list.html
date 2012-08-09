@@ -1,10 +1,14 @@
 {% block facets %}
 	<h2>Narrow your search</h2>
 	{% for facet in facets %}
-		<h3>{{ facet }}</h3>
-		<ul>
+		<h3>{{ facet.verbose_name|capfirst }}</h3>
+		<ul class="facet">
 			{% for label in facet.labels %}
-				<li>{% include "facettools/facet_label.html %}</li>
+				{% if label.is_selected %}
+					<li class="selected">{% include "facettools/selected_facet_label.html" %}</li>
+				{% else %}
+					<li>{% include "facettools/unselected_facet_label.html" %}</li>
+				{% endif %}
 			{% endfor %}
 		</ul>
 
@@ -13,7 +17,9 @@
 
 {% block items %}
 	<h2>Results</h2>
-	{% for item in items %}
-		{{ item }}
-	{% endfor %}
+	<ul>
+		{% for item in items %}
+			<li>{{ item }}</li>
+		{% endfor %}
+	</ul>
 {% endblock %}

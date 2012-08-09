@@ -1,0 +1,10 @@
+{% load generic_tags %}
+{% if not label.is_all %}{# can't unselect 'all' #}
+	<a href="?{% update_GET label.facet.name -= label %}"
+		 class="selected"
+	>
+{% endif %}
+	■ {{ label|escape|capfirst }}&nbsp;<span class="count">({{ label.count }})</span>
+{% if not label.is_all %}
+	</a>
+{% endif %}
