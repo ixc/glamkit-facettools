@@ -1,3 +1,4 @@
+from django.db.models.query_utils import Q
 from django.db.models.signals import pre_save, post_save, pre_delete
 try:
     from django.db.models.signals import m2m_changed
@@ -49,7 +50,11 @@ class ModelFacetGroup(FacetGroup):
             self.unindex_item(instance)
             self.index_item(instance)
 
-    def queryset(self):
+    @property
+    def Q(self):
         matches = self.matching_items()
         ids = [m.id for m in matches]
-        return self.model.objects.filter(id__in=ids)
+        return Q(id__in=ids)
+
+    def queryset(self):
+        return self.model.objects.filter(self.Q)

@@ -16,7 +16,7 @@ def faceted_list(request):
     items = facet_group.queryset().order_by('name')
 
     # paginate items, etc.
-    
+
     context = RequestContext(request)
     context['facets'] = facet_group.facet_list
     context['items'] = items
