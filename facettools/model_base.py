@@ -10,45 +10,38 @@ class ModelFacetGroup(FacetGroup):
     A Facetgroup that knows about model CRUD operations
     """
 
-    @classmethod
-    def watch_model(cls, model):
-        pre_save.connect(cls.pre_save, sender=model)
-        post_save.connect(cls.post_save, sender=model)
-        pre_delete.connect(cls.pre_delete, sender=model)
+    def watch_model(self, model):
+        pre_save.connect(self.pre_save, sender=model)
+        post_save.connect(self.post_save, sender=model)
+        pre_delete.connect(self.pre_delete, sender=model)
         if m2m_changed is not None:
-            m2m_changed.connect(cls.m2m_changed, sender=model)
+            m2m_changed.connect(self.m2m_changed, sender=model)
 
-    @classmethod
-    def unwatch_model(cls, model):
-        pre_save.disconnect(cls.pre_save, sender=model)
-        post_save.disconnect(cls.post_save, sender=model)
-        pre_delete.disconnect(cls.pre_delete, sender=model)
+    def unwatch_model(self, model):
+        pre_save.disconnect(self.pre_save, sender=model)
+        post_save.disconnect(self.post_save, sender=model)
+        pre_delete.disconnect(self.pre_delete, sender=model)
         if m2m_changed is not None:
-            m2m_changed.disconnect(cls.m2m_changed, sender=model)
+            m2m_changed.disconnect(self.m2m_changed, sender=model)
 
-    @classmethod
-    def pre_save(cls, sender, **kwargs):
+    def pre_save(self, sender, **kwargs):
         instance = kwargs.pop('instance')
         if instance.pk:
-            cls.unindex_item(instance)
+            self.unindex_item(instance)
 
-
-    @classmethod
-    def post_save(cls, sender, **kwargs):
+    def post_save(self, sender, **kwargs):
         instance = kwargs.pop('instance')
-        if instance in cls.unfiltered_collection():
-            cls.index_item(instance)
+        if instance in self.unfiltered_collection():
+            self.index_item(instance)
 
-    @classmethod
-    def pre_delete(cls, sender, **kwargs):
+    def pre_delete(self, sender, **kwargs):
         instance = kwargs.pop('instance')
         #remove current facets
-        cls.unindex_item(instance)
+        self.unindex_item(instance)
 
-    @classmethod
-    def m2m_changed(cls, sender, **kwargs):
+    def m2m_changed(self, sender, **kwargs):
         instance = kwargs.pop('instance')
-        if instance in cls.unfiltered_collection():
-            cls.unindex_item(instance)
-            cls.index_item(instance)
+        if instance in self.unfiltered_collection():
+            self.unindex_item(instance)
+            self.index_item(instance)
 

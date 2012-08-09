@@ -25,43 +25,48 @@ class ShopItem(models.Model):
         app_label="facettools"
 
 class ShopItemFacetGroup(ModelFacetGroup):
+    app_label = "facettools"
 
-    def _sort_price(a, b):
-        d = {
-            'free': 0,
-            '$0-$50': 1,
-            '$50-$100': 2,
-            '$100 or more': 3
-        }
-        return cmp(d[a.name], d[b.name])
+    def unfiltered_collection(self):
+        return ShopItem.objects.all()
 
-    price = Facet(
-        verbose_name="the price",
-        all_label="any price",
-        cmp_func=_sort_price
-    )
-    colours = Facet(
-        verbose_name="the colours",
-        select_multiple=True,
-    )
-    #selecting multiple colours  has an OR effect.
-    tags = Facet(
-        verbose_name="the tags",
-        select_multiple=True,
-        intersect_if_multiple=True,
-        cmp_func=sort_by_count
-    ) #selecting multiple tags has an AND effect
+    def declare_facets(self):
+        def _sort_price(a, b):
+            d = {
+                'free': 0,
+                '$0-$50': 1,
+                '$50-$100': 2,
+                '$100 or more': 3
+            }
+            return cmp(d[a.name], d[b.name])
 
-    class Meta:
-        app_label="facettools"
-        facets_order = ('price', 'tags', 'colours') #specify a field ordering
+        self.facets['price'] = Facet(
+            group=self,
+            name="price",
+            verbose_name="the price",
+            all_label="any price",
+            cmp_func=_sort_price
+        )
+        self.facets['colours'] = Facet(
+            group=self,
+            name="colours",
+            verbose_name="the colours",
+            select_multiple=True,
+        )
+        #selecting multiple colours  has an OR effect.
+        self.facets['tags'] = Facet(
+            group=self,
+            name="tags",
+            verbose_name="the tags",
+            select_multiple=True,
+            intersect_if_multiple=True,
+            cmp_func=sort_by_count
+        ) #selecting multiple tags has an AND effect
 
-    @classmethod
-    def get_colours_facet(cls, obj):
+    def get_colours_facet(self, obj):
         return [x.name for x in obj.colours.all()]
 
-    @classmethod
-    def get_price_facet(cls, obj):
+    def get_price_facet(self, obj):
         if obj.dollars is None:
             return None
         result = []
@@ -76,9 +81,8 @@ class ShopItemFacetGroup(ModelFacetGroup):
 
         return result
 
-    @classmethod
-    def get_tags_facet(cls, obj):
-         result = cls.get_colours_facet(obj)
+    def get_tags_facet(self, obj):
+         result = self.get_colours_facet(obj)
          if len(result) > 1:
              result.append("multicoloured")
          if obj.dollars == 0:
@@ -87,6 +91,3 @@ class ShopItemFacetGroup(ModelFacetGroup):
              result.append("shirt")
          return result
 
-    @classmethod
-    def unfiltered_collection(cls):
-        return ShopItem.objects.all()

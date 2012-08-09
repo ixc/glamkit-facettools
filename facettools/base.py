@@ -50,7 +50,7 @@ class FacetLabel(object):
                 # then ignore whatever is selected
                 result = self.facet.group.matching_items(ignore=[self.facet])
             elif self.facet.select_multiple and self.facet.intersect_if_multiple:
-                # then simulate further intersection
+                # then simulate additional intersection
                 result = self.facet.group.matching_items() & self.items
             else:
                 # then simulate intersection as though no other labels were
@@ -100,15 +100,16 @@ class Facet(object):
     _FacetLabelClass = FacetLabel
 
     def __init__(self,
+                 name, #the name of this facet, e.g. "colour"
+                 group, #the FacetGroup that contains this facet
                  verbose_name=None,
                  all_label="all",
                  cmp_func=None,
                  select_multiple=False,
                  intersect_if_multiple=False,
     ):
-        self.group = None # a FacetGroup subclass. It will be populated by the
-                            # metaclass
-        self.name = None # this will be populated by the metaclass
+        self.group = group
+        self.name = name
         self._verbose_name = verbose_name # access with `verbose_name`
         self.all_label = all_label
         if cmp_func:
@@ -280,107 +281,43 @@ class Facet(object):
         return filter(lambda x: x.is_selected, self._label_dict.values())
 
 
-
-class FacetGroupBase(type):
-    """
-    Metaclass for all FacetGroups
-    """
-    # FIXME: TODO:
-    # We should deepcopy parent facets, because they'll be tied up in
-    # different implementations and hence will have different metadata.
-    def __new__(cls, name, bases, attrs):
-        super_new = super(FacetGroupBase, cls).__new__
-        parents = [b for b in bases if isinstance(b, FacetGroupBase)]
-        if not parents:
-            # If this isn't a subclass of FacetGroup,
-            # don't do anything special.
-            return super_new(cls, name, bases, attrs)
-
-        # Figure out the app_label by looking one level up.
-        # For 'shop.models', this would be 'shop'.
-        module = attrs.pop('__module__')
-        new_class = super_new(cls, name, bases, {'__module__': module})
-        attr_meta = attrs.pop('Meta', None)
-        if not attr_meta:
-            meta = getattr(new_class, 'Meta', None)
-        else:
-            meta = attr_meta
-
-        if getattr(meta, 'app_label', None) is None:
-            model_module = sys.modules[new_class.__module__]
-            app_label = model_module.__name__.split('.')[-2]
-        else:
-            app_label = meta.app_label
-        new_class.add_to_class('app_label', app_label)
-
-        # make the register of facets
-        facet_dict = SortedDict()
-
-        # get facets from parents
-        for base in parents:
-            if isinstance(getattr(base, 'facet_dict', None), SortedDict):
-                facet_dict.update(base.facet_dict)
-
-        # Add all attributes to the class.
-        for obj_name, obj in attrs.items():
-            new_class.add_to_class(obj_name, obj)
-            if isinstance(obj, Facet):
-                obj.name = obj_name
-                obj.group = new_class
-                facet_dict[obj_name] = obj
-
-        #sort facets according to facets_order, if given.
-        if getattr(meta, 'facets_order', None) is not None:
-            facets_order = meta.facets_order
-            if facets_order:
-                new_class.add_to_class('facets_order', facets_order)
-                try:
-                    assert set(facets_order) == set(facet_dict.keys())
-                except AssertionError:
-                    raise ValueError("the facets_order attribute of a FacetGroup "
-                                     "does not contain all the FacetGroup's "
-                                     "fields: %s vs %s") % (facets_order, facet_dict.keys())
-
-                sorted_tuples = sorted(
-                    facet_dict.items(),
-                    key=lambda x: facets_order.index(x[0])
-                )
-                facet_dict = SortedDict(sorted_tuples)
-        new_class.add_to_class('facet_dict', facet_dict)
-
-        return new_class
-
-    def add_to_class(cls, name, value):
-        if hasattr(value, 'contribute_to_class'):
-            value.contribute_to_class(cls, name)
-        else:
-            setattr(cls, name, value)
-
 class FacetGroup(object):
     """
     A Facetgroup is the whole set of facets on a collection that interact.
     """
-    __metaclass__ = FacetGroupBase
-    _matching_items = None
 
-    # a `facet_dict` SortedDict is injected by the metaclass,
-    # which contains all of the facets defined in the subclass
-    # sorted by the order defined in Meta.facets_order
-
-    @classmethod
-    def facets(cls):
-        return cls.facet_dict.values()
+    app_label = None
 
     def __init__(self):
-        raise TypeError("FacetGroup subclasses shouldn't be instantiated "
-                        "(they are singleton-like).")
+        self._matching_items = None
+        self.facets = SortedDict()
+        self.declare_facets()
+        if self.app_label is None:
+            model_module = sys.modules[self.__class__.__module__]
+            self.app_label = model_module.__name__.split('.')[-2]
 
-    @classmethod #shame it can't be a property
-    def key(cls):
-        return "%s__%s" % (cls.app_label, get_verbose_name(cls.__name__))
+    def declare_facets(self):
+        raise NotImplemented("FacetGroup subclasses should implement "
+                             "declare_facets")
 
-    @classmethod
-    def rebuild_index(cls):
+    @property
+    def facet_list(self):
+        return self.facets.values()
+
+    @property #shame it can't be a property
+    def key(self):
+        return "%s__%s" % (self.app_label, get_verbose_name(self.__class__.__name__))
+
+    def __getattr__(self, item):
+        try:
+            return self.facets[item]
+        except KeyError:
+            import pdb; pdb.set_trace()
+            raise AttributeError(
+                "%s object has no attribute '%s' - it is not the name of a facet either." \
+                    % (self.__class__.__name__, item))
+
+    def rebuild_index(self):
         """
         Bulk update to rebuild index
         1. erase old index
@@ -391,43 +328,39 @@ class FacetGroup(object):
         3. save facet labels to the index
         4. update facets
         """
-        cls.clear_items()
-        for item in cls.unfiltered_collection():
-            cls.index_item(item, inhibit_save=True)
-        for facet in cls.facets():
+        self.clear_items()
+        for item in self.unfiltered_collection():
+            self.index_item(item, inhibit_save=True)
+        for facet in self.facet_list:
             facet.save()
-        cls.update()
+        self.update()
 
-    @classmethod
-    def clear_items(cls):
+    def clear_items(self):
         """
         Subclasses that implement storage may wish to purge the storage to
         avoid orphans.
         """
-        for facet in cls.facets():
+        for facet in self.facet_list:
             facet.clear_items()
 
-    @classmethod
-    def index_item(cls, item, inhibit_save=False):
-        for facet in cls.facets():
+    def index_item(self, item, inhibit_save=False):
+        for facet in self.facet_list:
             facet.index_item(item, inhibit_save)
 
-    @classmethod
-    def unindex_item(cls, item, inhibit_save=False):
-        for facet in cls.facets():
+    def unindex_item(self, item, inhibit_save=False):
+        for facet in self.facet_list:
             facet.unindex_item(item, inhibit_save)
 
-    @classmethod
-    def matching_items(cls, ignore=[]):
+    def matching_items(self, ignore=[]):
         """
         Take the intersection of the items that match each facet.
         """
         if ignore == []:
-            if cls._matching_items is not None:
-                return cls._matching_items
+            if self._matching_items is not None:
+                return self._matching_items
 
         mi = None
-        for facet in cls.facets():
+        for facet in self.facet_list:
             if facet not in ignore:
                 if mi is None:
                     mi = facet.matching_items().copy()
@@ -435,31 +368,28 @@ class FacetGroup(object):
                     mi &= facet.matching_items()
 
         if ignore == []:
-            cls._matching_items = mi
+            self._matching_items = mi
 
         return mi
 
-    @classmethod
-    def invalidate(cls):
-        cls._matching_items = None
-        for facet in cls.facets():
+    def invalidate(self):
+        self._matching_items = None
+        for facet in self.facet_list:
             facet.invalidate()
 
-    @classmethod
-    def update(cls):
+    def update(self):
         """
         Invalidate the _matching_items cache
         Update the sort of facet labels to reflect the current selection.
         """
-        cls.invalidate()
-        for facet in cls.facets():
+        self.invalidate()
+        for facet in self.facet_list:
             facet.sort()
 
-    @classmethod
-    def clear_all(cls):
+    def clear_all(self):
         """
         Unselect all facets
         """
-        for facet in cls.facets():
+        for facet in self.facet_list:
             facet.clear_selection()
 
