@@ -42,6 +42,12 @@ class TestSimpleFacets(TestCase):
         )
         self.rainbow_shirt.colours.add(*list(Colour.objects.all()))
 
+        self.old_fashioned_shirt = ShopItem.objects.create(
+            name="archived shirt", dollars = 2,
+            is_archived=True,
+        )
+        self.old_fashioned_shirt.colours.add(self.yellow)
+
         self.f = ShopItemFacetGroup()
         self.f.rebuild_index()
 
@@ -58,6 +64,7 @@ class TestSimpleFacets(TestCase):
                          self.f.colours)
 
     def test_facet_display(self):
+        self.f.clear_all()
         self.f.update() # default selection
 
         # basic FacetField attributes are name, verbose name and labels
@@ -68,7 +75,7 @@ class TestSimpleFacets(TestCase):
         self.assertEqual(self.f.price.labels[0].name, 'any price')
         self.assertEqual(self.f.price.labels[0].is_all, True)
         self.assertEqual(self.f.price.labels[0].is_selected, True)
-        self.assertEqual(self.f.price.labels[0].count, ShopItem.objects.count())
+        self.assertEqual(self.f.price.labels[0].count, ShopItem.objects.filter(is_archived=False).count())
 
         self.assertEqual(self.f.price.labels[1].name, 'free')
         self.assertEqual(self.f.price.labels[1].is_all, False)
@@ -79,13 +86,83 @@ class TestSimpleFacets(TestCase):
         self.assertEqual(self.f.price.labels[2].is_all, False)
         self.assertEqual(self.f.price.labels[2].is_selected, False)
         self.assertEqual(self.f.price.labels[2].count, 4)
+
+        #etc
+    def test_hide_all(self):
+
+        self.f.clear_all()
+        self.f.update() # default selection
+        self.assertEqual(len(self.f.archived1.labels), 3)
+        self.assertEqual(len(self.f.archived2.labels), 3)
+        self.assertEqual(len(self.f.archived3.labels), 2)
+        self.assertEqual(len(self.f.archived4.labels), 2)
+
+        self.assertEqual(self.f.archived3.labels[0].name, 'no')
+        self.assertEqual(self.f.archived3.labels[1].name, 'yes')
+
+        self.assertEqual(self.f.archived4.labels[0].name, 'no')
+        self.assertEqual(self.f.archived4.labels[1].name, 'yes')
         #etc.
 
+    def test_default_selection(self):
+        self.f.clear_all()
+        self.f.update() # default selection
+
+        #archived1 has default='no'
+        self.assertEqual(self.f.archived1[0].name, "all")
+        self.assertEqual(self.f.archived1[0].is_all, True)
+        self.assertEqual(self.f.archived1[0].is_selected, False)
+        self.assertEqual(self.f.archived1[0].is_default, False)
+        self.assertEqual(self.f.archived1[1].name, "no")
+        self.assertEqual(self.f.archived1[1].is_all, False)
+        self.assertEqual(self.f.archived1[1].is_selected, True)
+        self.assertEqual(self.f.archived1[1].is_default, True)
+        self.assertEqual(self.f.archived1[2].name, "yes")
+        self.assertEqual(self.f.archived1[2].is_all, False)
+        self.assertEqual(self.f.archived1[2].is_selected, False)
+        self.assertEqual(self.f.archived1[2].is_default, False)
+
+        #archived2 has default behaviour
+        self.assertEqual(self.f.archived2[0].name, "all")
+        self.assertEqual(self.f.archived2[0].is_all, True)
+        self.assertEqual(self.f.archived2[0].is_selected, True)
+        self.assertEqual(self.f.archived2[0].is_default, True)
+        self.assertEqual(self.f.archived2[1].name, "no")
+        self.assertEqual(self.f.archived2[1].is_all, False)
+        self.assertEqual(self.f.archived2[1].is_selected, False)
+        self.assertEqual(self.f.archived2[1].is_default, False)
+        self.assertEqual(self.f.archived2[2].name, "yes")
+        self.assertEqual(self.f.archived2[2].is_all, False)
+        self.assertEqual(self.f.archived2[2].is_selected, False)
+        self.assertEqual(self.f.archived2[2].is_default, False)
+
+        #archived3 has default='no', hide_all = True
+        self.assertEqual(self.f.archived3[0].name, "no")
+        self.assertEqual(self.f.archived3[0].is_all, False)
+        self.assertEqual(self.f.archived3[0].is_selected, True)
+        self.assertEqual(self.f.archived3[0].is_default, True)
+        self.assertEqual(self.f.archived3[1].name, "yes")
+        self.assertEqual(self.f.archived3[1].is_all, False)
+        self.assertEqual(self.f.archived3[1].is_selected, False)
+        self.assertEqual(self.f.archived3[1].is_default, False)
+
+        #archived4 has hide_all = True
+        self.assertEqual(self.f.archived4[0].name, "no")
+        self.assertEqual(self.f.archived4[0].is_all, False)
+        self.assertEqual(self.f.archived4[0].is_selected, False)
+        self.assertEqual(self.f.archived4[0].is_default, False)
+        self.assertEqual(self.f.archived4[1].name, "yes")
+        self.assertEqual(self.f.archived4[1].is_all, False)
+        self.assertEqual(self.f.archived4[1].is_selected, False)
+        self.assertEqual(self.f.archived4[1].is_default, False)
+
+
     def test_facet_selection(self):
+        self.f.clear_all()
         self.f.update()
         self.assertEqual(set(self.f.unfiltered_collection()),
                          set(ShopItem.objects.all()))
-        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.all()))
+        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
 
         check_counts(self, self.f.price, (
             ('any price', 7, True),
@@ -125,7 +202,7 @@ class TestSimpleFacets(TestCase):
         self.f.price.select('free')
         # need to call "update" to recalculate everything.
         # before:no change
-        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.all()))
+        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
         self.f.update()
         # after: change
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
@@ -168,7 +245,7 @@ class TestSimpleFacets(TestCase):
         self.f.price.select('$0-$50')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
-            (dollars__lte=50)))
+            (dollars__lte=50, is_archived=False)))
 
         check_counts(self, self.f.price, (
             ('any price', 7, False),
@@ -334,7 +411,7 @@ class TestSimpleFacets(TestCase):
         #unselect all the colour facets
         self.f.colours.clear_selection()
         self.f.update()
-        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.all()))
+        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
 
         # you can pass several labels to a multiselect facet
         self.f.colours.select('red', 'blue')
@@ -356,7 +433,9 @@ class TestSimpleFacets(TestCase):
         # unselect all facets
         self.f.clear_all()
         self.f.update()
-        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.all()))
+        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
 
-        # you can't pass a label that doesn't exist.
-        self.assertRaises(KeyError, self.f.colours.select, 'maroon')
+        # you selecting a label that doesn't exist has no effect.
+        self.f.colours.select('maroon')
+        self.f.update()
+        self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))

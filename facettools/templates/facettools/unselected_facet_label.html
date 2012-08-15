@@ -1,4 +1,0 @@
-{% load generic_tags %}
-<a href="?{% if label.is_all %}{% update_GET label.facet.name = None 'page' = None %}{% else %}{% if label.facet.select_multiple %}{% update_GET label.facet.name += label 'page' = None %}{% else %}{% update_GET label.facet.name = label 'page' = None %}{% endif %}{% endif %}" class="">
-	□ {{ label|escape|capfirst }}&nbsp;<span class="count">({{ label.count }})</span>
-</a>

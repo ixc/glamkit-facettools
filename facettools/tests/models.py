@@ -17,6 +17,7 @@ class ShopItem(models.Model):
     name = models.CharField(max_length=255)
     dollars = models.IntegerField(null=True)
     colours = models.ManyToManyField(Colour, null=True)
+    is_archived = models.BooleanField(default=False)
 
     def __unicode__(self):
         return "%s ($%s)" % (self.name, self.dollars)
@@ -63,6 +64,33 @@ class ShopItemFacetGroup(ModelFacetGroup):
             cmp_func=sort_by_count
         ) #selecting multiple tags has an AND effect
 
+        # Four similar facets that test the hide_all and default options
+        self.facets['archived1'] = Facet(
+            group=self,
+            name="archived1",
+            hide_all=False,
+            default_selected_labels="no",
+        )
+        self.facets['archived2'] = Facet(
+            group=self,
+            name="archived2",
+            hide_all=False,
+            default_selected_labels=None,
+        )
+        self.facets['archived3'] = Facet(
+            group=self,
+            name="archived3",
+            hide_all=True,
+            default_selected_labels=["no"], # can also pass a list to select many (when applicable)
+        )
+        self.facets['archived4'] = Facet(
+            group=self,
+            name="archived4",
+            hide_all=True,
+            default_selected_labels=None,
+        )
+
+
     def get_colours_facet(self, obj):
         return [x.name for x in obj.colours.all()]
 
@@ -91,3 +119,7 @@ class ShopItemFacetGroup(ModelFacetGroup):
              result.append("shirt")
          return result
 
+    def get_archived4_facet(self, obj):
+        return "yes" if obj.is_archived else "no"
+
+    get_archived1_facet = get_archived2_facet = get_archived3_facet = get_archived4_facet

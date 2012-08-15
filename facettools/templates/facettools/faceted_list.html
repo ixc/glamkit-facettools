@@ -1,17 +1,6 @@
 {% block facets %}
 	<h2>Narrow your search</h2>
-	{% for facet in facets %}
-		<h3>{{ facet.verbose_name|capfirst }}</h3>
-		<ul class="facet">
-			{% for label in facet.labels %}
-				{% if label.is_selected %}
-					<li class="selected">{% include "facettools/selected_facet_label.html" %}</li>
-				{% else %}
-					<li>{% include "facettools/unselected_facet_label.html" %}</li>
-				{% endif %}
-			{% endfor %}
-		</ul>
-	{% endfor %}
+	{% include "facettools/_facets.html" %}
 {% endblock %}
 
 {% block items %}

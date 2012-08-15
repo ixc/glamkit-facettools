@@ -2,7 +2,7 @@
 GLAMkit-facettools
 ================
 
-A tool for dealing with facets in collections. It is part of the `GLAMkit project <http://glamkit.org/>`_. For more information, see the `documentation <http://docs.glamkit.org/stopspam/>`_.
+A tool for dealing with facets in collections. It is part of the `GLAMkit project <http://glamkit.org/>`_. For more information, see the `documentation <http://docs.glamkit.org/facettools/>`_.
 
 View a full list of `GLAMkit components <http://docs.glamkit.org/components/>`_.
 

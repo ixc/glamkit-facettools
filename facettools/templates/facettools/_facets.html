@@ -1,0 +1,27 @@
+<a class="reset" href="?">Start over</a>
+{% for facet in facets %}
+	<h3>{{ facet.verbose_name|capfirst }}</h3>
+	<ul class="facet">
+		{% for label in facet.labels %}
+			{% if label.count %}
+				{% if label.is_selected %}
+					<li class="selected">
+						{% if label.is_all %}
+							{% include "facettools/_all_selected_facet_label.html" %}
+						{% else %}
+							{% include "facettools/_selected_facet_label.html" %}
+						{% endif %}
+					</li>
+				{% else %}
+					<li>
+						{% if label.is_all %}
+							{% include "facettools/_all_unselected_facet_label.html" %}
+						{% else %}
+							{% include "facettools/_unselected_facet_label.html" %}
+						{% endif %}
+					</li>
+				{% endif %}
+			{% endif %}
+		{% endfor %}
+	</ul>
+{% endfor %}
