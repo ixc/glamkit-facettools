@@ -1,5 +1,4 @@
 Now:
-* Front-end views
 * Implement storage for facet items. I think a simple cache value will do. We
  have to make sure the cache is thread-safe, ie that it doesn't store items
  based on the request (instead, unfiltered items)
@@ -8,3 +7,4 @@ Now:
 
 Later:
 * Generate a sentence based on selected facets
+* Allow Facets to specify the name of the attribute (ie on a model), including properties

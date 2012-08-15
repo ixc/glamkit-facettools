@@ -174,7 +174,11 @@ class Facet(object):
         if attr:
             facet_labels = attr(item)
         else:
-            facet_labels = None
+            attr = getattr(item, attr_name, None)
+            if attr:
+                facet_labels = attr()
+            else:
+                facet_labels = None
 
         if facet_labels is not None:
             if not isinstance(facet_labels, (list, tuple, set)):
@@ -200,15 +204,16 @@ class Facet(object):
     def index_labels(self, facet_labels, item, inhibit_save=False):
         for label in facet_labels:
             # initialise a FacetLabel if we have to
+            ltext = unicode(label)
             if label not in self._label_dict:
-                self._label_dict[label] = self._FacetLabelClass(facet=self,
-                                                            name=label)
-                if label in self.default_selected_labels:
-                    self._label_dict[label].is_default = True
-                    self._label_dict[label].is_selected = True
+                self._label_dict[ltext] = self._FacetLabelClass(facet=self,
+                                                            name=ltext)
+                if ltext in self.default_selected_labels:
+                    self._label_dict[ltext].is_default = True
+                    self._label_dict[ltext].is_selected = True
 
 
-            self._label_dict[label].add_item(item)
+            self._label_dict[ltext].add_item(item)
         if not inhibit_save:
             self.save()
 

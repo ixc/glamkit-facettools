@@ -25,6 +25,21 @@ class ShopItem(models.Model):
     class Meta:
         app_label="facettools"
 
+    def get_price_facet(self):
+        if self.dollars is None:
+            return None
+        result = []
+        if self.dollars == 0:
+            result.append('free')
+        if self.dollars <=50:
+            result.append('$0-$50')
+        if self.dollars >=50 and self.dollars <=100:
+            result.append('$50-$100')
+        if self.dollars >=100:
+            result.append('$100 or more')
+
+        return result
+
 class ShopItemFacetGroup(ModelFacetGroup):
     app_label = "facettools"
 
@@ -93,21 +108,6 @@ class ShopItemFacetGroup(ModelFacetGroup):
 
     def get_colours_facet(self, obj):
         return [x.name for x in obj.colours.all()]
-
-    def get_price_facet(self, obj):
-        if obj.dollars is None:
-            return None
-        result = []
-        if obj.dollars == 0:
-            result.append('free')
-        if obj.dollars <=50:
-            result.append('$0-$50')
-        if obj.dollars >=50 and obj.dollars <=100:
-            result.append('$50-$100')
-        if obj.dollars >=100:
-            result.append('$100 or more')
-
-        return result
 
     def get_tags_facet(self, obj):
          result = self.get_colours_facet(obj)
