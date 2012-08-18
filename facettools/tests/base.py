@@ -64,12 +64,12 @@ class TestSimpleFacets(TestCase):
                          self.f.colours)
 
     def test_facet_display(self):
-        self.f.clear_all()
+        self.f.clear_selection()
         self.f.update() # default selection
 
         # basic FacetField attributes are name, verbose name and labels
-        self.assertEqual(self.f.price.name, "price")
-        self.assertEqual(self.f.price.verbose_name, "the price")
+        self.assertEqual(self.f.price.name, "the price")
+        self.assertEqual(self.f.price.slug, "price")
         # basic FacetLabel attributes are name, is_all, selected and count
         self.assertEqual(len(self.f.price.labels), 5) #including 'all'
         self.assertEqual(self.f.price.labels[0].name, 'any price')
@@ -87,10 +87,14 @@ class TestSimpleFacets(TestCase):
         self.assertEqual(self.f.price.labels[2].is_selected, False)
         self.assertEqual(self.f.price.labels[2].count, 4)
 
+        self.assertEqual(self.f.price.labels[3].name, '$50-$100')
+        self.assertEqual(self.f.price.labels[3].is_all, False)
+        self.assertEqual(self.f.price.labels[3].is_selected, False)
+        self.assertEqual(self.f.price.labels[3].count, 4)
         #etc
     def test_hide_all(self):
 
-        self.f.clear_all()
+        self.f.clear_selection()
         self.f.update() # default selection
         self.assertEqual(len(self.f.archived1.labels), 3)
         self.assertEqual(len(self.f.archived2.labels), 3)
@@ -105,7 +109,7 @@ class TestSimpleFacets(TestCase):
         #etc.
 
     def test_default_selection(self):
-        self.f.clear_all()
+        self.f.clear_selection()
         self.f.update() # default selection
 
         #archived1 has default='no'
@@ -158,7 +162,7 @@ class TestSimpleFacets(TestCase):
 
 
     def test_facet_selection(self):
-        self.f.clear_all()
+        self.f.clear_selection()
         self.f.update()
         self.assertEqual(set(self.f.unfiltered_collection()),
                          set(ShopItem.objects.all()))
@@ -199,7 +203,7 @@ class TestSimpleFacets(TestCase):
 
 
         # select a single facet
-        self.f.price.select('free')
+        self.f.price.select_slugs('free')
         # need to call "update" to recalculate everything.
         # before:no change
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
@@ -242,7 +246,7 @@ class TestSimpleFacets(TestCase):
         ))
 
         # change the selected label of a facet (price is single-select)
-        self.f.price.select('$0-$50')
+        self.f.price.select_slugs('0-50')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
             (dollars__lte=50, is_archived=False)))
@@ -282,7 +286,7 @@ class TestSimpleFacets(TestCase):
 
 
         # add another facet - red-coloured shirts for $0-$50
-        self.f.colours.select('red')
+        self.f.colours.select_slugs('red')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
             (dollars__lte=50, colours=self.red)))
@@ -327,7 +331,7 @@ class TestSimpleFacets(TestCase):
 
         # add several labels to that facet (colour is multi-select,
         # and conjoined with 'OR')
-        self.f.colours.select('blue')
+        self.f.colours.select_slugs('blue')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
             (dollars__lte=50, colours__in=[self.red, self.blue])))
@@ -370,7 +374,7 @@ class TestSimpleFacets(TestCase):
             set(['red', 'blue'])) #TODO: maintain ordering
 
         #unselect the price facet
-        self.f.price.unselect('$0-$50')
+        self.f.price.unselect_slugs('0-50')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
             (colours__in=[self.red, self.blue])))
@@ -414,16 +418,16 @@ class TestSimpleFacets(TestCase):
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
 
         # you can pass several labels to a multiselect facet
-        self.f.colours.select('red', 'blue')
+        self.f.colours.select_slugs('red', 'blue')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter
             (colours__in=[self.blue, self.red])))
 
         # but you cannot pass several labels to a single-select facet
-        self.assertRaises(ValueError, self.f.price.select, 'free', '$0-$50')
+        self.assertRaises(ValueError, self.f.price.select_slugs, 'free', '0-50')
 
         #select several tag facets
-        self.f.tags.select('blue', 'red')
+        self.f.tags.select_slugs('blue', 'red')
         # tags are AND-conjoined (ie intersection)
         self.f.update()
         self.assertEqual(set(self.f.matching_items()),
@@ -431,11 +435,11 @@ class TestSimpleFacets(TestCase):
         )
 
         # unselect all facets
-        self.f.clear_all()
+        self.f.clear_selection()
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))
 
         # you selecting a label that doesn't exist has no effect.
-        self.f.colours.select('maroon')
+        self.f.colours.select_slugs('maroon')
         self.f.update()
         self.assertEqual(set(self.f.matching_items()), set(ShopItem.objects.filter(is_archived=False)))

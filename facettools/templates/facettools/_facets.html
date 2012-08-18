@@ -1,6 +1,6 @@
 <a class="reset" href="?">Start over</a>
 {% for facet in facets %}
-	<h3>{{ facet.verbose_name|capfirst }}</h3>
+	<h3>{{ facet.name|capfirst }}</h3>
 	<ul class="facet">
 		{% for label in facet.labels %}
 			{% if label.count %}

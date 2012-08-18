@@ -37,7 +37,6 @@ class ShopItem(models.Model):
             result.append('$50-$100')
         if self.dollars >=100:
             result.append('$100 or more')
-
         return result
 
 class ShopItemFacetGroup(ModelFacetGroup):
@@ -58,22 +57,22 @@ class ShopItemFacetGroup(ModelFacetGroup):
 
         self.facets['price'] = Facet(
             group=self,
-            name="price",
-            verbose_name="the price",
+            name="the price",
+            slug="price",
             all_label="any price",
             cmp_func=_sort_price
         )
         self.facets['colours'] = Facet(
+            name="the colours",
             group=self,
-            name="colours",
-            verbose_name="the colours",
+            slug="colours",
             select_multiple=True,
         )
         #selecting multiple colours  has an OR effect.
         self.facets['tags'] = Facet(
+            name="the tags",
             group=self,
-            name="tags",
-            verbose_name="the tags",
+            slug="tags",
             select_multiple=True,
             intersect_if_multiple=True,
             cmp_func=sort_by_count
@@ -81,28 +80,28 @@ class ShopItemFacetGroup(ModelFacetGroup):
 
         # Four similar facets that test the hide_all and default options
         self.facets['archived1'] = Facet(
-            group=self,
             name="archived1",
+            group=self,
             hide_all=False,
-            default_selected_labels="no",
+            default_selected_slugs="no",
         )
         self.facets['archived2'] = Facet(
-            group=self,
             name="archived2",
+            group=self,
             hide_all=False,
-            default_selected_labels=None,
+            default_selected_slugs=None,
         )
         self.facets['archived3'] = Facet(
-            group=self,
             name="archived3",
+            group=self,
             hide_all=True,
-            default_selected_labels=["no"], # can also pass a list to select many (when applicable)
+            default_selected_slugs=["no"], # can also pass a list to select many (when applicable)
         )
         self.facets['archived4'] = Facet(
-            group=self,
             name="archived4",
+            group=self,
             hide_all=True,
-            default_selected_labels=None,
+            default_selected_slugs=None,
         )
 
 

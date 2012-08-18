@@ -1,5 +1,5 @@
 {% load generic_tags %}
-	<a href="?{% update_GET label.facet.name -= label 'page' = None %}"
+	<a href="?{% update_GET label.facet.slug -= label.slug 'page' = None %}"
 		 class="selected"
 	>
 	■ {{ label|escape|capfirst }}&nbsp;<span class="count">({{ label.count }})</span>

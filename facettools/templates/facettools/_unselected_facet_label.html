@@ -1,4 +1,4 @@
 {% load generic_tags %}
-	<a href="?{% spaceless %}{% if label.facet.select_multiple %}{% update_GET label.facet.name += label 'page' = None %}{% else %}{% if label.is_default %}{% update_GET label.facet.name = None 'page' = None %}{% else %}{% update_GET label.facet.name = label 'page' = None %}{% endif %}{% endif %}{% endspaceless %}">
+	<a href="?{% if label.facet.select_multiple %}{% update_GET label.facet.slug += label.slug 'page' = None %}{% else %}{% if label.is_default %}{% update_GET label.facet.slug = None 'page' = None %}{% else %}{% update_GET label.facet.slug = label.slug 'page' = None %}{% endif %}{% endif %}">
 	□ {{ label|escape|capfirst }}&nbsp;<span class="count">({{ label.count }})</span>
 	</a>

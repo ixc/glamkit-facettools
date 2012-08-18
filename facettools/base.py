@@ -1,13 +1,26 @@
 import sys
+from django.template.defaultfilters import slugify
 from django.utils.datastructures import SortedDict
 from facettools.utils import get_verbose_name
 
 class FacetLabel(object):
-    def __init__(self, facet, name, is_all=False, is_selected=False, is_default=False):
+    def __init__(
+        self,
+        facet,
+        name,
+        slug=None,
+        is_all=False,
+        is_selected=False,
+        is_default=False
+    ):
         # the facet that I am a label of
         self.facet = facet
         # the string that is displayed
         self.name = name
+        if slug is None:
+            self.slug = slugify(self.name)
+        else:
+            self.slug = slug
         # the set of matching items (when no other facets are selected)
         # use `get_/set_items` to get and set.
         self._items = self.initialise_items()
@@ -71,7 +84,7 @@ class FacetLabel(object):
 
     @property
     def key(self):
-        return "%s__%s" % (self.facet.key, self.name)
+        return "%s__%s" % (self.facet.key, self.slug)
 
     def __eq__(self, other):
         if not isinstance(other, FacetLabel):
@@ -101,34 +114,42 @@ class Facet(object):
     _FacetLabelClass = FacetLabel
 
     def __init__(self,
-                 name, #the name of this facet, e.g. "colour"
-                 group, #the FacetGroup that contains this facet
-                 verbose_name=None,
-                 all_label="all",
-                 cmp_func=None,
-                 select_multiple=False,
-                 intersect_if_multiple=False,
-                 default_selected_labels=None, #a list of labels (strings) to select by default
-                 #TODO: if default_selected_labels == True, then all labels are selected by default.
-                 hide_all=False, #set to true to prevent the "all_label" from being used or shown.
+         name,
+         group, #the FacetGroup that contains this facet
+         slug=None, #the slug of this facet, e.g. "colour"
+         all_label="all",
+         all_label_slug=None,
+         cmp_func=None,
+         select_multiple=False,
+         intersect_if_multiple=False,
+         default_selected_slugs=None, #a list of labels (strings) to select by default
+         #TODO: if default_selected_slugs == True, then all labels are selected by default.
+         hide_all=False, #set to true to prevent the "all_label" from being used or shown.
     ):
         self.group = group
         self.name = name
-        self._verbose_name = verbose_name # access with `verbose_name`
+        if slug is None:
+            self.slug = slugify(name)
+        else:
+            self.slug = slug
         self.all_label = all_label
+        if all_label_slug is None:
+            self.all_label_slug = slugify(all_label)
+        else:
+            self.all_label_slug = all_label_slug
         if cmp_func:
             self.cmp_func = cmp_func
         else:
-            self.cmp_func = lambda a, b: cmp(a.name, b.name)
+            self.cmp_func = lambda a, b: cmp(a.slug, b.slug)
         self.select_multiple = select_multiple
         self.intersect_if_multiple = intersect_if_multiple
 
-        if default_selected_labels is None:
-            self.default_selected_labels = [self.all_label]
-        elif isinstance(default_selected_labels, (list, set, tuple)):
-            self.default_selected_labels = default_selected_labels
+        if default_selected_slugs is None:
+            self.default_selected_slugs = [self.all_label_slug]
+        elif isinstance(default_selected_slugs, (list, set, tuple)):
+            self.default_selected_slugs = default_selected_slugs
         else:
-            self.default_selected_labels = [default_selected_labels]
+            self.default_selected_slugs = [default_selected_slugs]
 
         self.hide_all=hide_all
 
@@ -136,11 +157,7 @@ class Facet(object):
 
     @property
     def key(self):
-        return "%s__%s" % (self.group.key(), self.name)
-
-    @property
-    def verbose_name(self):
-        return self._verbose_name or self.name.replace("_", " ")
+        return "%s__%s" % (self.group.key(), self.slug)
 
     def __getitem__(self, item):
         if isinstance(item, int):
@@ -156,11 +173,12 @@ class Facet(object):
         self._label_dict = {}
 
         if not self.hide_all:
-            self._label_dict[self.all_label] = self._FacetLabelClass(facet=self,
-                                            name=self.all_label, is_all=True)
-            if self.all_label in self.default_selected_labels:
-                self._label_dict[self.all_label].is_default = True
-                self._label_dict[self.all_label].is_selected = True
+            self._label_dict[self.all_label_slug] = self._FacetLabelClass(
+                facet=self, name=self.all_label, slug=self.all_label_slug,
+                is_all=True)
+            if self.all_label_slug in self.default_selected_slugs:
+                self._label_dict[self.all_label_slug].is_default = True
+                self._label_dict[self.all_label_slug].is_selected = True
         # dict of FacetLabel objects, for bookkeeping
         self.labels = None # a sorted list of FacetLabels objects for
         # displaying, generated by calling update()
@@ -168,7 +186,7 @@ class Facet(object):
 
     def index_item(self, item, inhibit_save=False):
         # call get_FOO_facet on the item
-        attr_name = "get_%s_facet" % self.name
+        attr_name = "get_%s_facet" % self.slug.replace("-", "")
         attr = getattr(self.group, attr_name, None)
 
         if attr:
@@ -187,14 +205,14 @@ class Facet(object):
 
         # add every item to the 'all' facet
         if not self.hide_all:
-            self._label_dict[self.all_label].add_item(item)
+            self._label_dict[self.all_label_slug].add_item(item)
 
     def unindex_item(self, item, inhibit_save=False):
         labels_to_remove = set()
         for facet_label in self._label_dict.values():
             facet_label.items.discard(item)
             if len(facet_label.items) == 0: #empty label! delete it.
-                labels_to_remove.add(facet_label.name)
+                labels_to_remove.add(facet_label.slug)
             if not inhibit_save:
                 facet_label.save()
 
@@ -205,15 +223,16 @@ class Facet(object):
         for label in facet_labels:
             # initialise a FacetLabel if we have to
             ltext = unicode(label)
-            if label not in self._label_dict:
-                self._label_dict[ltext] = self._FacetLabelClass(facet=self,
-                                                            name=ltext)
-                if ltext in self.default_selected_labels:
-                    self._label_dict[ltext].is_default = True
-                    self._label_dict[ltext].is_selected = True
+            slug = slugify(ltext)
+            if slug not in self._label_dict:
+                self._label_dict[slug] = self._FacetLabelClass(facet=self,
+                                                name=ltext, slug=slug)
+                if ltext in self.default_selected_slugs:
+                    self._label_dict[slug].is_default = True
+                    self._label_dict[slug].is_selected = True
 
 
-            self._label_dict[ltext].add_item(item)
+            self._label_dict[slug].add_item(item)
         if not inhibit_save:
             self.save()
 
@@ -263,31 +282,31 @@ class Facet(object):
         unsorted = self._label_dict.values()
         self.labels = sorted(unsorted, cmp=_sort_func)
 
-    def select(self, *labels):
+    def select_slugs(self, *slugs):
         """
-        Mark label(s) of this facet as being selected.
+        Mark label(s) of this facet as being selected by passing in a list of slugs.
         """
 
         # Can't select more than one label, unless select_multiple is true
-        if len(labels) > 1:
+        if len(slugs) > 1:
             if not self.select_multiple:
                 raise ValueError("%s does not allow more than one label to be"
                                  " selected" % self)
-            if self.all_label in labels:
+            if self.all_label_slug in slugs:
                 raise ValueError("You cannot select 'all' at the same time as"
                                  " another facet")
 
 
-        if not labels == [self.all_label] and not self.hide_all:
-            self._label_dict[self.all_label].is_selected = False
+        if not slugs == [self.all_label_slug] and not self.hide_all:
+            self._label_dict[self.all_label_slug].is_selected = False
 
-        if not self.select_multiple or labels == [self.all_label]:
+        if not self.select_multiple or slugs == [self.all_label_slug]:
             # clear other selections
             for v in self._label_dict:
                 self._label_dict[v].is_selected = False
 
         # make the selection
-        for v in labels:
+        for v in slugs:
             try:
                 self._label_dict[v].is_selected = True
             except KeyError:
@@ -295,25 +314,27 @@ class Facet(object):
 
     def _select_default(self):
         """
-        select the default values (usually all_label - set in init)
+        select the default values (usually all_label - set in init).
+
+        Don't call directly, call via clear_selection.
         """
-        for k in self.default_selected_labels:
+        for k in self.default_selected_slugs:
             try:
                 self._label_dict[k].is_selected = True
             except KeyError:
                 pass
 
-    def unselect(self, *labels):
+    def unselect_slugs(self, *slugs):
         """
         Mark label(s) of this facet as not being selected.
         """
 
-        if labels == [self.all_label]:
+        if slugs == [self.all_label_slug]:
             raise ValueError("You cannot unselect 'all'. Select another facet"
                              " instead.")
 
          # make the unselection
-        for v in labels:
+        for v in slugs:
             self._label_dict[v].is_selected = False
 
         # if nothing is selected, select default, or 'all'
@@ -435,7 +456,7 @@ class FacetGroup(object):
         for facet in self.facet_list:
             facet.sort()
 
-    def clear_all(self):
+    def clear_selection(self):
         """
         Unselect all facets
         """
@@ -444,8 +465,9 @@ class FacetGroup(object):
 
     def apply_request(self, request):
         # Parse a request to select the facets within it.
+        self.clear_selection()
         get = request.GET
         for facet in self.facet_list:
-            vals = get.getlist(facet.name)
+            vals = get.getlist(facet.slug)
             if vals:
-                facet.select(*vals)
+                facet.select_slugs(*vals)
