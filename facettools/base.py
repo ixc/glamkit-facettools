@@ -1,7 +1,9 @@
 import sys
+
 from django.template.defaultfilters import slugify
 from django.utils.datastructures import SortedDict
-from facettools.utils import get_verbose_name
+
+from .utils import get_verbose_name, is_iterable
 
 class FacetLabel(object):
     def __init__(
@@ -146,7 +148,7 @@ class Facet(object):
 
         if default_selected_slugs is None:
             self.default_selected_slugs = [self.all_label_slug]
-        elif isinstance(default_selected_slugs, (list, set, tuple)):
+        elif is_iterable(default_selected_slugs):
             self.default_selected_slugs = default_selected_slugs
         else:
             self.default_selected_slugs = [default_selected_slugs]
@@ -199,7 +201,7 @@ class Facet(object):
                 facet_labels = None
 
         if facet_labels is not None:
-            if not isinstance(facet_labels, (list, tuple, set)):
+            if not is_iterable(facet_labels):
                 facet_labels = [facet_labels]
             self.index_labels(facet_labels, item, inhibit_save)
 

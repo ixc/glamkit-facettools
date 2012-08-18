@@ -11,3 +11,7 @@ def sort_by_count(a, b):
     if x == 0:
         return cmp(a.name, b.name)
     return x
+
+def is_iterable(obj):
+    """Checks if the object is a non-string sequence."""
+    return hasattr(obj, '__iter__') and not isinstance(obj, basestring)
