@@ -438,6 +438,8 @@ class FacetGroup(object):
                         mi = fmi.copy() #don't want to overwrite this when we &= to it.
                     else:
                         mi &= fmi
+        if mi is None:
+            mi = set()
 
         if ignore == []:
             self._matching_items = mi
