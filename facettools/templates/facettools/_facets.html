@@ -1,4 +1,6 @@
-<a class="reset" href="?">Start over</a>
+{% if facets.is_filtered %}
+	<a class="reset" href="?">Start over</a>
+{% endif %}
 {% for facet in facets %}
 	<h3>{{ facet.name|capfirst }}</h3>
 	<ul class="facet">

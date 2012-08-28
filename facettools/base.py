@@ -361,6 +361,7 @@ class FacetGroup(object):
 
     def __init__(self):
         self._matching_items = None
+        self.is_filtered = False
         self.facets = SortedDict()
         self.declare_facets()
         if self.app_label is None:
@@ -370,10 +371,6 @@ class FacetGroup(object):
     def declare_facets(self):
         raise NotImplemented("FacetGroup subclasses should implement "
                              "declare_facets")
-
-    @property
-    def facet_list(self):
-        return self.facets.values()
 
     @property #shame it can't be a property
     def key(self):
@@ -386,7 +383,15 @@ class FacetGroup(object):
             raise AttributeError(
                 "%s object has no attribute '%s' - it is not the name of a facet either." \
                     % (self.__class__.__name__, item))
-
+    
+    def __iter__(self):
+        """
+        Iterating over the group iterates over the facets (makes sense given
+        the way getattr works). This also allows us to pass the group object
+        into templates, which may need extra info like "is_filtered".
+        """
+        return self.facets.values().__iter__()
+    
     def rebuild_index(self):
         """
         Bulk update to rebuild index
@@ -401,7 +406,7 @@ class FacetGroup(object):
         self.clear_items()
         for item in self.unfiltered_collection():
             self.index_item(item, inhibit_save=True)
-        for facet in self.facet_list:
+        for facet in self:
             facet.save()
         self.update()
 
@@ -410,15 +415,15 @@ class FacetGroup(object):
         Subclasses that implement storage may wish to purge the storage to
         avoid orphans.
         """
-        for facet in self.facet_list:
+        for facet in self:
             facet.clear_items()
 
     def index_item(self, item, inhibit_save=False):
-        for facet in self.facet_list:
+        for facet in self:
             facet.index_item(item, inhibit_save)
 
     def unindex_item(self, item, inhibit_save=False):
-        for facet in self.facet_list:
+        for facet in self:
             facet.unindex_item(item, inhibit_save)
 
     def matching_items(self, ignore=[]):
@@ -430,7 +435,7 @@ class FacetGroup(object):
                 return self._matching_items
 
         mi = None
-        for facet in self.facet_list:
+        for facet in self:
             if facet not in ignore:
                 fmi = facet.matching_items()
                 if fmi:
@@ -448,7 +453,7 @@ class FacetGroup(object):
 
     def invalidate(self):
         self._matching_items = None
-        for facet in self.facet_list:
+        for facet in self:
             facet.invalidate()
 
     def update(self):
@@ -457,21 +462,22 @@ class FacetGroup(object):
         Update the sort of facet labels to reflect the current selection.
         """
         self.invalidate()
-        for facet in self.facet_list:
+        for facet in self:
             facet.sort()
 
     def clear_selection(self):
         """
         Unselect all facets
         """
-        for facet in self.facet_list:
+        for facet in self:
             facet.clear_selection()
 
     def apply_request(self, request):
         # Parse a request to select the facets within it.
         self.clear_selection()
         get = request.GET
-        for facet in self.facet_list:
+        for facet in self:
             vals = get.getlist(facet.slug)
             if vals:
                 facet.select_slugs(*vals)
+                self.is_filtered = True

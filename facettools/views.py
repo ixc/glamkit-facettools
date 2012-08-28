@@ -18,7 +18,7 @@ def faceted_list(request):
     # paginate items, etc.
 
     context = RequestContext(request)
-    context['facets'] = facet_group.facet_list
+    context['facets'] = facet_group
     context['items'] = items
 
     return render_to_response('facettools/faceted_list.html', context)
