@@ -1,7 +1,8 @@
 from django.test import TestCase
 from django.utils.datastructures import SortedDict
-from facettools.tests.utils import check_counts
+
 from .models import *
+from .utils import check_counts
 
 
 class TestSimpleFacets(TestCase):

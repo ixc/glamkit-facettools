@@ -1,6 +1,8 @@
 from django.test import TestCase
-from facettools.tests.models import ShopItem, Colour, ShopItemFacetGroup
-from facettools.tests.utils import check_counts
+
+from .models import ShopItem, Colour, ShopItemFacetGroup
+from .utils import check_counts
+
 
 class TestModelSignals(TestCase):
     def setUp(self):

@@ -2,9 +2,9 @@ from setuptools import setup, find_packages
 
 setup(
     name='glamkit-facettools',
-    version='0.1.0',
-    author='Julien Phalip',
-    author_email='julien@interaction.net.au',
+    version='0.2.0',
+    author='The Interaction Consortium',
+    author_email='admins@interaction.net.au',
     description='A Django app to help you filter lists of things and show number of results.',
     url='http://github.com/ixc/glamkit-facettools',
     packages=find_packages(),

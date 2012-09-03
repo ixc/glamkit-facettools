@@ -1,3 +1,8 @@
 Primary contributors:
 
 * Greg Turner <greg@interaction.net.au>
+
+Additional contributors:
+
+* James Murty <james@interaction.net.au>
+* Aram Dulyan <aram@interaction.net.au>

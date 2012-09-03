@@ -4,7 +4,9 @@ try:
     from django.db.models.signals import m2m_changed
 except ImportError:
     m2m_changed = None
-from facettools.base import FacetGroup
+
+from .base import FacetGroup
+
 
 class ModelFacetGroup(FacetGroup):
     """
